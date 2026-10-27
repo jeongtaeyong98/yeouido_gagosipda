@@ -7,9 +7,9 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 import pandas as pd
 
-st.set_page_config(page_title="정태용 대시보드", page_icon="📈", layout="wide")
-st.title("📈 정태용 - 매크로 & 증시 시황판")
-st.markdown("일일 대시보드")
+st.set_page_config(page_title="TY Alpha Terminal", page_icon="📈", layout="wide")
+st.title("📈 TY_HTS - 매크로 & 증시 시황판")
+st.markdown(" 일일 대시보드")
 st.write("---")
 
 KR_STOCKS = {
@@ -22,6 +22,16 @@ US_STOCKS = {
     "엔비디아": "NVDA", "Nvidia": "NVDA", "마이크로소프트": "MSFT", "Microsoft": "MSFT",
     "구글": "GOOGL", "Google": "GOOGL", "아마존": "AMZN", "Amazon": "AMZN", "메타": "META", "Meta": "META"
 }
+
+# 💡 KRX(한국거래소) 전 종목 이름-코드 매핑 (하루 1번만 캐시로 불러와서 속도 저하 없음)
+@st.cache_data(ttl=86400, show_spinner=False)
+def get_krx_mapping():
+    try:
+        df = fdr.StockListing('KRX')
+        return dict(zip(df['Name'], df['Code']))
+    except: return {}
+
+krx_mapping = get_krx_mapping()
 
 @st.cache_data(ttl=300)
 def get_metric(ticker):
@@ -44,14 +54,6 @@ def get_metric(ticker):
         return today, today - yesterday, ((today - yesterday) / yesterday) * 100 if yesterday != 0 else 0
     except: return 0.0, 0.0, 0.0
 
-@st.cache_data(ttl=300)
-def get_chart_data(ticker, period="3mo"):
-    try:
-        data = yf.download(ticker, period=period, progress=False)
-        return data['Close'].dropna() if not data.empty and 'Close' in data else None
-    except: return None
-
-# 💡 검색 기간(period)을 유동적으로 설정할 수 있게 업그레이드! (기본값: 1d)
 @st.cache_data(ttl=600, show_spinner=False)
 def get_latest_news(keyword, limit=7, period="1d"):
     try:
@@ -69,14 +71,14 @@ def display_stock_detail(ticker_symbol):
         if is_kr:
             fdr_ticker = ticker_symbol.replace('.KS', '').replace('.KQ', '')
             df_recent = fdr.DataReader(fdr_ticker)[-5:]
-            if df_recent.empty or len(df_recent) < 2: return st.error("데이터 오류")
+            if df_recent.empty or len(df_recent) < 2: return st.error("해당 종목을 찾을 수 없습니다. 이름이나 코드를 확인해주세요.")
             today_close = float(df_recent['Close'].iloc[-1])
             yesterday_close = float(df_recent['Close'].iloc[-2])
             vol = int(df_recent['Volume'].iloc[-1])
         else:
             stock = yf.Ticker(ticker_symbol)
             hist_5d = stock.history(period="5d").dropna(subset=['Close'])
-            if hist_5d.empty or len(hist_5d) < 2: return st.error("데이터 오류")
+            if hist_5d.empty or len(hist_5d) < 2: return st.error("해당 티커(Ticker)를 찾을 수 없습니다. 영문 철자를 확인해주세요.")
             today_close = float(hist_5d['Close'].iloc[-1])
             yesterday_close = float(hist_5d['Close'].iloc[-2])
             vol = int(hist_5d['Volume'].iloc[-1])
@@ -112,8 +114,8 @@ def display_stock_detail(ticker_symbol):
         if not df_chart.empty:
             st.line_chart(df_chart['Close'])
             st.bar_chart(df_chart['Volume'])
-        else: st.warning("데이터가 없습니다.")
-    except: st.error("에러 발생")
+        else: st.warning("해당 기간의 데이터가 없습니다.")
+    except: st.error("종목 데이터를 불러오는 중 에러가 발생했습니다.")
 
 tabs = st.tabs([
     "1️⃣ 핵심 지표", "2️⃣ 🇰🇷 한국 증시", "3️⃣ 🇰🇷 한국 뉴스", "4️⃣ 🇺🇸 미국 증시", 
@@ -144,63 +146,62 @@ with tabs[0]:
         if t == 0.0: st.metric("📊 한국 10년물 금리", "API 연동 필요", "-")
         else: st.metric("📊 한국 10년물 금리", f"{t:,.2f}%", f"{d:,.2f}%p ({p:+.2f}%)")
 
+# 💡 2번 탭: 한국 증시 전 종목 검색 오픈
 with tabs[1]:
-    kr_input = st.text_input("종목명/코드 입력 (예: SK하이닉스)", "삼성전자")
-    if kr_input: display_stock_detail(KR_STOCKS.get(kr_input, kr_input))
+    kr_input = st.text_input("🔍 종목명 또는 6자리 코드 입력 (예: 에코프로, 카카오뱅크, 323410)", "삼성전자")
+    if kr_input:
+        if kr_input in krx_mapping:
+            search_ticker = f"{krx_mapping[kr_input]}.KS"
+        elif kr_input.isdigit() and len(kr_input) == 6:
+            search_ticker = f"{kr_input}.KS"
+        else:
+            search_ticker = KR_STOCKS.get(kr_input, kr_input)
+        display_stock_detail(search_ticker)
 
 with tabs[2]:
     st.subheader("📰 오늘의 한국 경제 핵심 테마 (최근 24시간)")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown("### 🏦 매크로 & 무역")
-        for title, link in get_latest_news("금리 OR 환율 OR 수출 OR 부동산", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+        for title, link in get_latest_news("금리 OR 환율 OR 수출", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col2:
         st.markdown("### 📈 증시 & 수급")
-        for title, link in get_latest_news("코스피 OR 코스닥 OR 외국인 OR IPO", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+        for title, link in get_latest_news("코스피 OR 코스닥 OR 외국인순매수", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col3:
-        st.markdown("### 🚀 주도 산업 ")
-        for title, link in get_latest_news("AI OR 반도체 OR 광통신 OR 우주 OR 2차전지 OR FDA", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+        st.markdown("### 🚀 주도 산업 (AI·바이오)")
+        for title, link in get_latest_news("AI반도체 OR 2차전지 OR 바이오 FDA", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col4:
         st.markdown("### 🌎 글로벌 정치·외교")
-        for title, link in get_latest_news("트럼프 OR 베센트 OR 케빈워시 OR 관세 OR 미국 OR 연준", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+        for title, link in get_latest_news("트럼프 OR 베센트 OR 케빈워시 OR 무역관세", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
 
+# 💡 4번 탭: 미국 증시 티커 검색 지원 및 소문자 자동 변환
 with tabs[3]:
-    us_input = st.text_input("종목명/티커 입력 (예: TSLA)", "애플")
-    if us_input: display_stock_detail(US_STOCKS.get(us_input, us_input))
+    us_input = st.text_input("🔍 종목명(빅테크) 또는 영어 티커 입력 (예: 애플, PLTR, ARM, smci)", "애플")
+    if us_input:
+        # 영어 소문자를 입력해도 대문자로 자동 변환하여 인식
+        search_ticker = US_STOCKS.get(us_input, us_input.upper())
+        display_stock_detail(search_ticker)
 
 with tabs[4]:
     st.subheader("🌍 글로벌 경제 속보 (국내 주요 경제지 보도 기준)")
-    st.info("💡 번역 딜레이 없이, 월가 및 로이터 통신의 주요 이슈를 다룬 국내 최신 기사를 즉시 표출합니다.")
     col1, col2, col3 = st.columns(3)
-    
     with col1:
         st.markdown("### 🏦 Fed & 경제 지표")
-        for title, link in get_latest_news("연준 OR FOMC OR CPI OR PPI OR PCE OR 워시", limit=7, period="1d"): 
-            st.markdown(f"- [{title}]({link})")
-            
+        for title, link in get_latest_news("미국 연준 OR FOMC OR CPI OR 파월", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col2:
         st.markdown("### 📉 뉴욕 증시 & 국채")
-        for title, link in get_latest_news("뉴욕증시 OR S&P500 OR 나스닥 OR 미 국채금리", limit=7, period="1d"): 
-            st.markdown(f"- [{title}]({link})")
-            
+        for title, link in get_latest_news("뉴욕증시 OR S&P500 OR 나스닥 OR 미 국채금리", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col3:
-        st.markdown("### 💻 M7 & 산업")
-        for title, link in get_latest_news("엔비디아 OR 머스크 OR 젠슨황 OR M7 OR AI OR 반도체 OR 광통신 OR 방산 OR 조선", limit=7, period="1d"): 
-            st.markdown(f"- [{title}]({link})")
+        st.markdown("### 💻 M7 & AI 반도체")
+        for title, link in get_latest_news("엔비디아 OR 테슬라 OR 매그니피센트7 OR 빅테크", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
 
-# 💡 6번 탭: 한국 증시 일정 (최근 7일 기사 검색 허용)
 with tabs[5]:
     st.subheader("📅 🇰🇷 한국 주요 기업 실적 및 경제지표 일정")
-    st.info("💡 최근 1주일 내 보도된 한국 증시 주요 실적 발표 및 경제 일정 뉴스입니다.")
-    for title, link in get_latest_news("증시 일정 OR 실적 발표 OR 금통위 OR 한국은행 OR 금리", limit=10, period="7d"):
-        st.markdown(f"🔹 [{title}]({link})")
+    for title, link in get_latest_news("증시 일정 OR 코스피 실적 발표 OR 금통위", limit=10, period="7d"): st.markdown(f"🔹 [{title}]({link})")
 
-# 💡 7번 탭: 네가 제안한 미국 핵심 키워드 적용 (최근 7일 기사 검색 허용)
 with tabs[6]:
     st.subheader("📅 🇺🇸 미국 주요 기업 실적 및 경제지표 일정")
-    st.info("💡 최근 1주일 내 보도된 미국 M7 실적 및 주요 매크로 지표 일정 뉴스입니다.")
-    for title, link in get_latest_news("미국 증시 일정 OR 실적 OR FOMC OR CPI OR PPI OR PCE OR IPO OR 빅테크", limit=10, period="7d"):
-        st.markdown(f"🔹 [{title}]({link})")
+    for title, link in get_latest_news("미국 증시 일정 OR 실적 OR FOMC OR CPI OR PPI OR PCE", limit=10, period="7d"): st.markdown(f"🔹 [{title}]({link})")
 
 with tabs[7]:
     col1, col2, col3 = st.columns(3)
