@@ -248,4 +248,4 @@ with tabs[7]:
     with col3:
         st.markdown("### 🇹🇼 가권 지수")
         t, d, p = get_metric("^TWII")
-        st.metric("대만 증시", f"{t:,.2f
+        st.metric("대만 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
