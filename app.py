@@ -7,9 +7,9 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 import pandas as pd
 
-st.set_page_config(page_title="정태용 대시보드", page_icon="📈", layout="wide")
+st.set_page_config(page_title="여의도 가고싶다 대시보드", page_icon="📈", layout="wide")
 st.title("📈 Yeouido Gagosipda - 매크로 & 증시 시황판")
-st.markdown("일일 대시보드")
+st.markdown("산업정보시스템공학과 & 경영학 인사이트가 담긴 나만의 일일 대시보드")
 st.write("---")
 
 KR_STOCKS = {
@@ -192,29 +192,16 @@ with tabs[4]:
             st.markdown(f"- [{title}]({link})")
 
 with tabs[5]:
-    st.subheader("📅 🇰🇷 한국 주요 기업 실적 및 경제지표 일정")
-    kr_df = pd.DataFrame({
-        "날짜": ["10/29 (예시)", "10/30 (예시)", "10/31 (예시)", "11/01 (예시)"],
-        "이벤트/기업명": ["삼성전자 3분기 실적", "한국은행 금통위 의사록", "SK하이닉스 실적발표", "10월 수출입동향 발표"],
-        "매출액(예상)": ["79조 원", "-", "18조 원", "-"],
-        "영업이익(예상)": ["9.1조 원", "-", "6.5조 원", "-"],
-        "순이익(예상)": ["8.5조 원", "-", "5.2조 원", "-"],
-        "컨센서스": ["Shock (-10.5%)", "-", "Surprise (+5.2%)", "-"],
-        "중요도": ["⭐⭐⭐", "⭐⭐", "⭐⭐⭐", "⭐⭐⭐"]
-    })
-    st.dataframe(kr_df, use_container_width=True, hide_index=True)
+    st.subheader("📅 🇰🇷 한국 증시 및 경제지표 주간 일정")
+    st.info("💡 이번 주 코스피/코스닥 주요 실적과 한국은행(금통위) 지표 발표 일정이 정리된 최신 기사입니다.")
+    for title, link in get_latest_news("이번주 증시 일정 OR 주요 실적 발표 OR 금통위 일정", limit=7):
+        st.markdown(f"🔹 [{title}]({link})")
 
 with tabs[6]:
-    st.subheader("📅 🇺🇸 미국 주요 기업 실적 및 경제지표 일정")
-    us_df = pd.DataFrame({
-        "날짜(한국시간)": ["10/30 22:30 (예시)", "10/31 05:00 (예시)", "11/01 05:00 (예시)", "11/01 21:30 (예시)"],
-        "이벤트/기업명": ["미국 3분기 GDP (예비치)", "Microsoft (MSFT) 실적", "Apple (AAPL) 실적", "미국 10월 비농업 고용지수"],
-        "매출/수치(예상)": ["3.0%", "$64.5B", "$94.2B", "110K"],
-        "이익/수치(실제)": ["발표 대기", "발표 대기", "발표 대기", "발표 대기"],
-        "컨센서스": ["-", "-", "-", "-"],
-        "중요도": ["⭐⭐⭐", "⭐⭐⭐", "⭐⭐⭐", "⭐⭐⭐"]
-    })
-    st.dataframe(us_df, use_container_width=True, hide_index=True)
+    st.subheader("📅 🇺🇸 미국 증시 및 글로벌 경제지표 일정")
+    st.info("💡 이번 주 M7 실적과 연준(Fed)의 주요 매크로 지표(CPI, PCE 등) 발표 일정이 정리된 최신 기사입니다.")
+    for title, link in get_latest_news("이번주 뉴욕증시 일정 OR 경제지표 발표 OR FOMC 일정", limit=7):
+        st.markdown(f"🔹 [{title}]({link})")
 
 with tabs[7]:
     col1, col2, col3 = st.columns(3)
