@@ -51,12 +51,11 @@ def get_chart_data(ticker, period="3mo"):
         return data['Close'].dropna() if not data.empty and 'Close' in data else None
     except: return None
 
-# 💡 최신(24시간 이내) 한글 뉴스만 초고속으로 수집하는 단일 엔진 (when:1d 적용)
+# 💡 검색 기간(period)을 유동적으로 설정할 수 있게 업그레이드! (기본값: 1d)
 @st.cache_data(ttl=600, show_spinner=False)
-def get_latest_news(keyword, limit=7):
+def get_latest_news(keyword, limit=7, period="1d"):
     try:
-        # keyword 뒤에 ' when:1d'를 붙여 최근 24시간 기사만 강제 필터링
-        search_query = f"{keyword} when:1d"
+        search_query = f"{keyword} when:{period}"
         url = f"https://news.google.com/rss/search?q={urllib.parse.quote(search_query)}&hl=ko&gl=KR&ceid=KR:ko"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req) as response:
@@ -149,28 +148,26 @@ with tabs[1]:
     kr_input = st.text_input("종목명/코드 입력 (예: SK하이닉스)", "삼성전자")
     if kr_input: display_stock_detail(KR_STOCKS.get(kr_input, kr_input))
 
-# 💡 3번 탭: 최신 한국 뉴스 (when:1d 적용)
 with tabs[2]:
     st.subheader("📰 오늘의 한국 경제 핵심 테마 (최근 24시간)")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown("### 🏦 매크로 & 무역")
-        for title, link in get_latest_news("금리 OR 환율 OR 수출", limit=7): st.markdown(f"- [{title}]({link})")
+        for title, link in get_latest_news("금리 OR 환율 OR 수출", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col2:
         st.markdown("### 📈 증시 & 수급")
-        for title, link in get_latest_news("코스피 OR 코스닥 OR 외국인순매수", limit=7): st.markdown(f"- [{title}]({link})")
+        for title, link in get_latest_news("코스피 OR 코스닥 OR 외국인순매수", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col3:
         st.markdown("### 🚀 주도 산업 (AI·바이오)")
-        for title, link in get_latest_news("AI반도체 OR 2차전지 OR 바이오 FDA", limit=7): st.markdown(f"- [{title}]({link})")
+        for title, link in get_latest_news("AI반도체 OR 2차전지 OR 바이오 FDA", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col4:
         st.markdown("### 🌎 글로벌 정치·외교")
-        for title, link in get_latest_news("트럼프 OR 베센트 OR 케빈워시 OR 무역관세", limit=7): st.markdown(f"- [{title}]({link})")
+        for title, link in get_latest_news("트럼프 OR 베센트 OR 케빈워시 OR 무역관세", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
 
 with tabs[3]:
     us_input = st.text_input("종목명/티커 입력 (예: TSLA)", "애플")
     if us_input: display_stock_detail(US_STOCKS.get(us_input, us_input))
 
-# 💡 5번 탭: 번역기 제거! 한국 언론이 보도하는 로이터/월가 최신 글로벌 시황으로 대체
 with tabs[4]:
     st.subheader("🌍 글로벌 경제 속보 (국내 주요 경제지 보도 기준)")
     st.info("💡 번역 딜레이 없이, 월가 및 로이터 통신의 주요 이슈를 다룬 국내 최신 기사를 즉시 표출합니다.")
@@ -178,29 +175,31 @@ with tabs[4]:
     
     with col1:
         st.markdown("### 🏦 Fed & 경제 지표")
-        for title, link in get_latest_news("미국 연준 OR FOMC OR CPI OR 파월", limit=7): 
+        for title, link in get_latest_news("미국 연준 OR FOMC OR CPI OR 파월", limit=7, period="1d"): 
             st.markdown(f"- [{title}]({link})")
             
     with col2:
         st.markdown("### 📉 뉴욕 증시 & 국채")
-        for title, link in get_latest_news("뉴욕증시 OR S&P500 OR 나스닥 OR 미 국채금리", limit=7): 
+        for title, link in get_latest_news("뉴욕증시 OR S&P500 OR 나스닥 OR 미 국채금리", limit=7, period="1d"): 
             st.markdown(f"- [{title}]({link})")
             
     with col3:
         st.markdown("### 💻 M7 & AI 반도체")
-        for title, link in get_latest_news("엔비디아 OR 테슬라 OR 매그니피센트7 OR 빅테크", limit=7): 
+        for title, link in get_latest_news("엔비디아 OR 테슬라 OR 매그니피센트7 OR 빅테크", limit=7, period="1d"): 
             st.markdown(f"- [{title}]({link})")
 
+# 💡 6번 탭: 한국 증시 일정 (최근 7일 기사 검색 허용)
 with tabs[5]:
-    st.subheader("📅 🇰🇷 한국 증시 및 경제지표 주간 일정")
-    st.info("💡 이번 주 코스피/코스닥 주요 실적과 한국은행(금통위) 지표 발표 일정이 정리된 최신 기사입니다.")
-    for title, link in get_latest_news("이번주 증시 일정 OR 주요 실적 발표 OR 금통위 일정", limit=7):
+    st.subheader("📅 🇰🇷 한국 주요 기업 실적 및 경제지표 일정")
+    st.info("💡 최근 1주일 내 보도된 한국 증시 주요 실적 발표 및 경제 일정 뉴스입니다.")
+    for title, link in get_latest_news("증시 일정 OR 코스피 실적 발표 OR 금통위", limit=10, period="7d"):
         st.markdown(f"🔹 [{title}]({link})")
 
+# 💡 7번 탭: 네가 제안한 미국 핵심 키워드 적용 (최근 7일 기사 검색 허용)
 with tabs[6]:
-    st.subheader("📅 🇺🇸 미국 증시 및 글로벌 경제지표 일정")
-    st.info("💡 이번 주 M7 실적과 연준(Fed)의 주요 매크로 지표(CPI, PCE 등) 발표 일정이 정리된 최신 기사입니다.")
-    for title, link in get_latest_news("이번주 뉴욕증시 일정 OR 경제지표 발표 OR FOMC 일정", limit=7):
+    st.subheader("📅 🇺🇸 미국 주요 기업 실적 및 경제지표 일정")
+    st.info("💡 최근 1주일 내 보도된 미국 M7 실적 및 주요 매크로 지표 일정 뉴스입니다.")
+    for title, link in get_latest_news("미국 증시 일정 OR 실적 OR FOMC OR CPI OR PPI OR PCE", limit=10, period="7d"):
         st.markdown(f"🔹 [{title}]({link})")
 
 with tabs[7]:
