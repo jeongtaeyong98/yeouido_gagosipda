@@ -54,4 +54,9 @@ with tab1:
         st.line_chart(wti)
 
 with tab2:
+    st.subheader("🇰🇷 국내 주요 종목 테스트")
+    st.markdown("### 삼성전자")
+    samsung = load_data('005930.KS') # 삼성전자 종목코드 + .KS(코스피)
+    st.line_chart(samsung)
+
     st.info("💡 이곳에는 조만간 한국은행(ECOS) API를 연결해 국내 기준금리, 물가지수 등의 데이터를 추가할 예정입니다.")
