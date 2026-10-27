@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 
 st.set_page_config(page_title="정태용 대시보드", page_icon="📈", layout="wide")
-st.title("📈 Yeouido Gagosipda - 매크로 & 증시 시황판")
+st.title("📈 정태용 - 매크로 & 증시 시황판")
 st.markdown("일일 대시보드")
 st.write("---")
 
@@ -192,14 +192,14 @@ with tabs[4]:
 with tabs[5]:
     st.subheader("📅 🇰🇷 한국 주요 기업 실적 및 경제지표 일정")
     st.info("💡 최근 1주일 내 보도된 한국 증시 주요 실적 발표 및 경제 일정 뉴스입니다.")
-    for title, link in get_latest_news("증시 일정 OR 실적 발표 OR 금통위 OR 한국은행", limit=10, period="7d"):
+    for title, link in get_latest_news("증시 일정 OR 실적 발표 OR 금통위 OR 한국은행 OR 금리", limit=10, period="7d"):
         st.markdown(f"🔹 [{title}]({link})")
 
 # 💡 7번 탭: 네가 제안한 미국 핵심 키워드 적용 (최근 7일 기사 검색 허용)
 with tabs[6]:
     st.subheader("📅 🇺🇸 미국 주요 기업 실적 및 경제지표 일정")
     st.info("💡 최근 1주일 내 보도된 미국 M7 실적 및 주요 매크로 지표 일정 뉴스입니다.")
-    for title, link in get_latest_news("미국 증시 일정 OR 실적 OR FOMC OR CPI OR PPI OR PCE OR IPO", limit=10, period="7d"):
+    for title, link in get_latest_news("미국 증시 일정 OR 실적 OR FOMC OR CPI OR PPI OR PCE OR IPO OR 빅테크", limit=10, period="7d"):
         st.markdown(f"🔹 [{title}]({link})")
 
 with tabs[7]:
