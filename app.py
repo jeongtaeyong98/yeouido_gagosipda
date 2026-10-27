@@ -39,7 +39,17 @@ def get_metric(ticker):
     except Exception:
         return 0.0, 0.0, 0.0
 
-# (2) ⭐️ 만능 개별 종목 분석기 함수
+# (2) 미니 차트 데이터 불러오기 함수 (아시아 증시용)
+@st.cache_data
+def get_chart_data(ticker, period="3mo"):
+    try:
+        data = yf.download(ticker, period=period, progress=False)
+        if data.empty: return None
+        return data['Close'] if 'Close' in data else data
+    except:
+        return None
+
+# (3) ⭐️ 만능 개별 종목 분석기 함수
 def display_stock_detail(ticker_symbol):
     try:
         stock = yf.Ticker(ticker_symbol)
@@ -68,7 +78,6 @@ def display_stock_detail(ticker_symbol):
             
         st.write("---")
         
-        # 💡 여기가 바뀐 부분! (일봉이 맨 앞으로 왔어)
         chart_type = st.radio(
             "차트 종류 선택", 
             ["일봉 (최근 3개월)", "주봉 (최근 1년)", "월봉 (최근 5년)", "년봉 (전체)", "분봉 (오늘 5분 단위)"], 
@@ -101,23 +110,45 @@ def display_stock_detail(ticker_symbol):
 # 6개의 탭(페이지) 구성
 tabs = st.tabs(["1️⃣ 핵심 지표", "2️⃣ 🇰🇷 한국 증시", "3️⃣ 🇰🇷 한국 뉴스", "4️⃣ 🇺🇸 미국 증시", "5️⃣ 🌍 글로벌 뉴스", "6️⃣ 🌏 아시아 증시"])
 
+# ==========================================
+# 1페이지: 핵심 지표 (4열 배치로 넓게 사용)
+# ==========================================
 with tabs[0]:
     st.subheader("글로벌 핵심 매크로 & 증시 지표")
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
+    
     with col1:
-        t, d, p = get_metric('^GSPC')
-        st.metric(label="🇺🇸 S&P 500", value=f"{t:,.2f}", delta=f"{d:,.2f} ({p:+.2f}%)")
-        t, d, p = get_metric('KRW=X')
-        st.metric(label="💵 원/달러 환율", value=f"{t:,.2f}원", delta=f"{d:,.2f}원 ({p:+.2f}%)")
-    with col2:
-        t, d, p = get_metric('^IXIC')
-        st.metric(label="🇺🇸 NASDAQ", value=f"{t:,.2f}", delta=f"{d:,.2f} ({p:+.2f}%)")
-        t, d, p = get_metric('^TNX')
-        st.metric(label="📊 미국 10년물 국채 금리", value=f"{t:,.2f}%", delta=f"{d:,.2f}%p ({p:+.2f}%)")
-    with col3:
+        t, d, p = get_metric('^KS11')
+        st.metric(label="🇰🇷 KOSPI", value=f"{t:,.2f}", delta=f"{d:,.2f} ({p:+.2f}%)")
         t, d, p = get_metric('CL=F')
         st.metric(label="🛢️ WTI 원유 가격", value=f"${t:,.2f}", delta=f"${d:,.2f} ({p:+.2f}%)")
+        
+    with col2:
+        t, d, p = get_metric('^KQ11')
+        st.metric(label="🇰🇷 KOSDAQ", value=f"{t:,.2f}", delta=f"{d:,.2f} ({p:+.2f}%)")
+        t, d, p = get_metric('KRW=X')
+        st.metric(label="💵 원/달러 환율", value=f"{t:,.2f}원", delta=f"{d:,.2f}원 ({p:+.2f}%)")
 
+    with col3:
+        t, d, p = get_metric('^GSPC')
+        st.metric(label="🇺🇸 S&P 500", value=f"{t:,.2f}", delta=f"{d:,.2f} ({p:+.2f}%)")
+        t, d, p = get_metric('^TNX')
+        st.metric(label="📊 미국 10년물 국채 금리", value=f"{t:,.2f}%", delta=f"{d:,.2f}%p ({p:+.2f}%)")
+
+    with col4:
+        t, d, p = get_metric('^IXIC')
+        st.metric(label="🇺🇸 NASDAQ", value=f"{t:,.2f}", delta=f"{d:,.2f} ({p:+.2f}%)")
+        
+        # 한국 국채 10년물은 yfinance에서 누락되는 경우가 잦아 방어 코드 적용
+        t, d, p = get_metric('KR10YT=RR') 
+        if t == 0.0:
+            st.metric(label="📊 한국 10년물 국채 금리", value="API 연동 필요", delta="-")
+        else:
+            st.metric(label="📊 한국 10년물 국채 금리", value=f"{t:,.2f}%", delta=f"{d:,.2f}%p ({p:+.2f}%)")
+
+# ==========================================
+# 2페이지: 한국 증시
+# ==========================================
 with tabs[1]:
     st.subheader("🇰🇷 한국 증시 개별 종목 검색")
     kr_input = st.text_input("종목명 또는 코드 입력 (예: SK하이닉스, 000660.KS)", "삼성전자")
@@ -125,10 +156,16 @@ with tabs[1]:
         kr_ticker = KR_STOCKS.get(kr_input, kr_input)
         display_stock_detail(kr_ticker)
 
+# ==========================================
+# 3페이지: 한국 경제 뉴스
+# ==========================================
 with tabs[2]:
     st.subheader("📰 한국 거시경제, 기업, 산업 뉴스")
     st.warning("🚧 [업데이트 예정] 조만간 네이버 뉴스 API를 연결할 공간입니다.")
 
+# ==========================================
+# 4페이지: 미국 증시
+# ==========================================
 with tabs[3]:
     st.subheader("🇺🇸 미국 증시 개별 종목 검색")
     us_input = st.text_input("종목명 또는 티커 입력 (예: 테슬라, TSLA)", "애플")
@@ -136,19 +173,37 @@ with tabs[3]:
         us_ticker = US_STOCKS.get(us_input, us_input)
         display_stock_detail(us_ticker)
 
+# ==========================================
+# 5페이지: 글로벌 경제 뉴스
+# ==========================================
 with tabs[4]:
     st.subheader("🌍 전 세계 거시경제, 기업, 산업 뉴스")
     st.warning("🚧 [업데이트 예정] 해외 뉴스 API를 연동할 공간입니다.")
 
+# ==========================================
+# 6페이지: 아시아 증시 (차트 추가)
+# ==========================================
 with tabs[5]:
-    st.subheader("🌏 주요 아시아 증시 지표")
+    st.subheader("🌏 주요 아시아 증시 지표 (최근 3개월 흐름)")
     col1, col2, col3 = st.columns(3)
+    
     with col1:
+        st.markdown("### 🇯🇵 니케이 225")
         t, d, p = get_metric("^N225")
-        st.metric(label="🇯🇵 니케이 225 (일본)", value=f"{t:,.2f}", delta=f"{d:,.2f} ({p:+.2f}%)")
+        st.metric(label="일본 증시", value=f"{t:,.2f}", delta=f"{d:,.2f} ({p:+.2f}%)")
+        chart_data = get_chart_data("^N225")
+        if chart_data is not None: st.line_chart(chart_data)
+        
     with col2:
+        st.markdown("### 🇨🇳 상해 종합")
         t, d, p = get_metric("000001.SS")
-        st.metric(label="🇨🇳 상해 종합 (중국)", value=f"{t:,.2f}", delta=f"{d:,.2f} ({p:+.2f}%)")
+        st.metric(label="중국 증시", value=f"{t:,.2f}", delta=f"{d:,.2f} ({p:+.2f}%)")
+        chart_data = get_chart_data("000001.SS")
+        if chart_data is not None: st.line_chart(chart_data)
+        
     with col3:
+        st.markdown("### 🇹🇼 가권 지수")
         t, d, p = get_metric("^TWII")
-        st.metric(label="🇹🇼 가권 지수 (대만)", value=f"{t:,.2f}", delta=f"{d:,.2f} ({p:+.2f}%)")
+        st.metric(label="대만 증시", value=f"{t:,.2f}", delta=f"{d:,.2f} ({p:+.2f}%)")
+        chart_data = get_chart_data("^TWII")
+        if chart_data is not None: st.line_chart(chart_data)
