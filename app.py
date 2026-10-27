@@ -5,7 +5,7 @@ import yfinance as yf
 st.set_page_config(page_title="여의도 가고싶다 대시보드", page_icon="📈", layout="wide")
 
 st.title("📈 Yeouido Gagosipda - 매크로 & 증시 시황판")
-st.markdown(일일 증시 시황판")
+st.markdown("일일 증시 시황판")
 st.write("---")
 
 # 자주 찾는 종목 이름-코드 맵핑
