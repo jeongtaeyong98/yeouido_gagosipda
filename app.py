@@ -2,6 +2,9 @@ import streamlit as st
 import yfinance as yf
 import FinanceDataReader as fdr
 import datetime
+import urllib.request
+import urllib.parse
+import xml.etree.ElementTree as ET
 
 # 웹페이지 기본 설정
 st.set_page_config(page_title="여의도 가고싶다 대시보드", page_icon="📈", layout="wide")
@@ -10,7 +13,6 @@ st.title("📈 Yeouido Gagosipda - 매크로 & 증시 시황판")
 st.markdown("산업정보시스템공학과 & 경영학 인사이트가 담긴 나만의 일일 대시보드")
 st.write("---")
 
-# 자주 찾는 종목 이름-코드 맵핑
 KR_STOCKS = {
     "삼성전자": "005930.KS", "SK하이닉스": "000660.KS", "LG에너지솔루션": "373220.KS",
     "현대차": "005380.KS", "기아": "000270.KS", "KB금융": "105560.KS",
@@ -22,11 +24,9 @@ US_STOCKS = {
     "구글": "GOOGL", "Google": "GOOGL", "아마존": "AMZN", "Amazon": "AMZN", "메타": "META", "Meta": "META"
 }
 
-# (1) 핵심 지표 전일 대비 계산 (한국 지수는 FDR로 실시간 반영)
-@st.cache_data(ttl=300) # 5분마다 새로고침 되도록 캐시 수명 설정
+@st.cache_data(ttl=300)
 def get_metric(ticker):
     try:
-        # 코스피, 코스닥은 FinanceDataReader 사용
         if ticker == '^KS11':
             df = fdr.DataReader('KS11')
             close_data = df['Close'][-5:]
@@ -50,7 +50,6 @@ def get_metric(ticker):
     except Exception:
         return 0.0, 0.0, 0.0
 
-# (2) 미니 차트 데이터 (글로벌용)
 @st.cache_data(ttl=300)
 def get_chart_data(ticker, period="3mo"):
     try:
@@ -60,27 +59,42 @@ def get_chart_data(ticker, period="3mo"):
     except:
         return None
 
-# (3) ⭐️ 만능 개별 종목 분석기 (한국 주식은 FDR 엔진 탑재)
+@st.cache_data(ttl=600) 
+def get_news(keyword, is_global=False, limit=20):
+    try:
+        if is_global: 
+            url = f"https://news.google.com/rss/search?q={urllib.parse.quote(keyword)}&hl=en-US&gl=US&ceid=US:en"
+        else: 
+            url = f"https://news.google.com/rss/search?q={urllib.parse.quote(keyword)}&hl=ko&gl=KR&ceid=KR:ko"
+            
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            xml_data = response.read()
+            
+        root = ET.fromstring(xml_data)
+        news_list = []
+        for item in root.findall('.//item')[:limit]:
+            title = item.find('title').text
+            link = item.find('link').text
+            news_list.append((title, link))
+        return news_list
+    except Exception as e:
+        return []
+
 def display_stock_detail(ticker_symbol):
     try:
         is_kr = ticker_symbol.endswith('.KS') or ticker_symbol.endswith('.KQ')
-        
-        # 최신 현재가 및 거래량 추출
         if is_kr:
             fdr_ticker = ticker_symbol.replace('.KS', '').replace('.KQ', '')
             df_recent = fdr.DataReader(fdr_ticker)[-5:]
-            if df_recent.empty or len(df_recent) < 2:
-                st.error("한국 주식 데이터를 불러오지 못했습니다.")
-                return
+            if df_recent.empty or len(df_recent) < 2: return st.error("한국 주식 데이터를 불러오지 못했습니다.")
             today_close = float(df_recent['Close'].iloc[-1])
             yesterday_close = float(df_recent['Close'].iloc[-2])
             vol = int(df_recent['Volume'].iloc[-1])
         else:
             stock = yf.Ticker(ticker_symbol)
             hist_5d = stock.history(period="5d").dropna(subset=['Close'])
-            if hist_5d.empty or len(hist_5d) < 2:
-                st.error("미국 주식 데이터를 불러오지 못했습니다.")
-                return
+            if hist_5d.empty or len(hist_5d) < 2: return st.error("미국 주식 데이터를 불러오지 못했습니다.")
             today_close = float(hist_5d['Close'].iloc[-1])
             yesterday_close = float(hist_5d['Close'].iloc[-2])
             vol = int(hist_5d['Volume'].iloc[-1])
@@ -92,36 +106,20 @@ def display_stock_detail(ticker_symbol):
         with col1:
             if is_kr: st.metric("현재가", f"{today_close:,.0f}원", f"{diff:,.0f}원 ({pct:+.2f}%)")
             else: st.metric("현재가", f"${today_close:,.2f}", f"${diff:,.2f} ({pct:+.2f}%)")
-        with col2:
-            st.metric("당일 거래량", f"{vol:,.0f}주")
+        with col2: st.metric("당일 거래량", f"{vol:,.0f}주")
             
         st.write("---")
+        chart_type = st.radio("차트 종류 선택", ["일봉 (최근 3개월)", "주봉 (최근 1년)", "월봉 (최근 5년)", "년봉 (전체)", "분봉 (오늘 5분 단위)"], horizontal=True, key=f"radio_{ticker_symbol}")
         
-        chart_type = st.radio(
-            "차트 종류 선택", 
-            ["일봉 (최근 3개월)", "주봉 (최근 1년)", "월봉 (최근 5년)", "년봉 (전체)", "분봉 (오늘 5분 단위)"], 
-            horizontal=True, 
-            key=f"radio_{ticker_symbol}" 
-        )
-        
-        # 차트 데이터 추출 로직 분리 (FDR vs YF)
         end_date = datetime.datetime.today()
-        
         if is_kr:
             if "분봉" in chart_type:
-                st.info("💡 한국 주식의 5분봉 차트는 실시간 무료 API 지원이 어려워, 야후 파이낸스의 지연 시세로 제공됩니다.")
+                st.info("💡 한국 주식의 분봉 차트는 야후 파이낸스의 지연 시세로 제공됩니다.")
                 df_chart = yf.Ticker(ticker_symbol).history(period="1d", interval="5m")
-            elif "일봉" in chart_type:
-                df_chart = fdr.DataReader(fdr_ticker, start=end_date - datetime.timedelta(days=90))
-            elif "주봉" in chart_type:
-                df = fdr.DataReader(fdr_ticker, start=end_date - datetime.timedelta(days=365))
-                df_chart = df.resample('W-FRI').agg({'Close':'last', 'Volume':'sum'})
-            elif "월봉" in chart_type:
-                df = fdr.DataReader(fdr_ticker, start=end_date - datetime.timedelta(days=365*5))
-                df_chart = df.resample('ME').agg({'Close':'last', 'Volume':'sum'})
-            else:
-                df = fdr.DataReader(fdr_ticker)
-                df_chart = df.resample('ME').agg({'Close':'last', 'Volume':'sum'})
+            elif "일봉" in chart_type: df_chart = fdr.DataReader(fdr_ticker, start=end_date - datetime.timedelta(days=90))
+            elif "주봉" in chart_type: df_chart = fdr.DataReader(fdr_ticker, start=end_date - datetime.timedelta(days=365)).resample('W-FRI').agg({'Close':'last', 'Volume':'sum'})
+            elif "월봉" in chart_type: df_chart = fdr.DataReader(fdr_ticker, start=end_date - datetime.timedelta(days=365*5)).resample('ME').agg({'Close':'last', 'Volume':'sum'})
+            else: df_chart = fdr.DataReader(fdr_ticker).resample('ME').agg({'Close':'last', 'Volume':'sum'})
         else:
             stock = yf.Ticker(ticker_symbol)
             if "분봉" in chart_type: df_chart = stock.history(period="1d", interval="5m")
@@ -131,19 +129,15 @@ def display_stock_detail(ticker_symbol):
             else: df_chart = stock.history(period="max", interval="3mo")
             
         df_chart = df_chart.dropna(subset=['Close'])
-            
         if not df_chart.empty:
             st.markdown("**📈 주가 추이**")
             st.line_chart(df_chart['Close'])
             st.markdown("**📊 거래량**")
             st.bar_chart(df_chart['Volume'])
-        else:
-            st.warning("해당 기간의 차트 데이터가 없습니다.")
+        else: st.warning("해당 기간의 차트 데이터가 없습니다.")
             
-    except Exception as e:
-        st.error(f"데이터 처리 중 에러가 발생했습니다: {e}")
+    except Exception as e: st.error(f"데이터 처리 중 에러가 발생했습니다: {e}")
 
-# 6개의 탭(페이지) 구성
 tabs = st.tabs(["1️⃣ 핵심 지표", "2️⃣ 🇰🇷 한국 증시", "3️⃣ 🇰🇷 한국 뉴스", "4️⃣ 🇺🇸 미국 증시", "5️⃣ 🌍 글로벌 뉴스", "6️⃣ 🌏 아시아 증시"])
 
 with tabs[0]:
@@ -178,9 +172,32 @@ with tabs[1]:
         kr_ticker = KR_STOCKS.get(kr_input, kr_input)
         display_stock_detail(kr_ticker)
 
+# 💡 3번 탭: 네가 설정한 한국 뉴스 3열 (최적화 완료)
 with tabs[2]:
-    st.subheader("📰 한국 거시경제, 기업, 산업 뉴스")
-    st.warning("🚧 [업데이트 예정] 조만간 네이버 뉴스 API를 연결할 공간입니다.")
+    st.subheader("📰 오늘의 한국 경제 핵심 테마")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("### 🏦 매크로 & 무역")
+        for title, link in get_news("금리 환율 수출", is_global=False, limit=7):
+            st.markdown(f"- [{title}]({link})")
+            
+    with col2:
+        st.markdown("### 📈 증시 & 수급")
+        for title, link in get_news("코스피 외국인 기관", is_global=False, limit=7):
+            st.markdown(f"- [{title}]({link})")
+            
+    with col3:
+        st.markdown("### 🚀 주도 산업 (AI·바이오)")
+        for title, link in get_news("반도체 AI FDA", is_global=False, limit=7):
+            st.markdown(f"- [{title}]({link})")
+            
+    st.write("---")
+    st.subheader("🔍 특정 테마 뉴스 상세 검색")
+    kr_news_keyword = st.text_input("찾고 싶은 키워드를 입력하세요 (최대 20개 표출)", "2차전지")
+    if kr_news_keyword:
+        for title, link in get_news(kr_news_keyword, is_global=False, limit=20):
+            st.markdown(f"🔹 [{title}]({link})")
 
 with tabs[3]:
     st.subheader("🇺🇸 미국 증시 개별 종목 검색")
@@ -189,9 +206,32 @@ with tabs[3]:
         us_ticker = US_STOCKS.get(us_input, us_input)
         display_stock_detail(us_ticker)
 
+# 💡 5번 탭: 네가 설정한 글로벌 뉴스 3열 (영문 최적화 완료)
 with tabs[4]:
-    st.subheader("🌍 전 세계 거시경제, 기업, 산업 뉴스")
-    st.warning("🚧 [업데이트 예정] 해외 뉴스 API를 연동할 공간입니다.")
+    st.subheader("🌍 오늘의 글로벌 경제 핵심 테마")
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("### 🏦 Fed & 경제 지표")
+        for title, link in get_news("Fed FOMC CPI PCE", is_global=True, limit=7):
+            st.markdown(f"- [{title}]({link})")
+            
+    with col2:
+        st.markdown("### 📉 뉴욕 증시 & 국채")
+        for title, link in get_news("Nasdaq S&P 500 Treasury", is_global=True, limit=7):
+            st.markdown(f"- [{title}]({link})")
+            
+    with col3:
+        st.markdown("### 💻 M7 & AI 반도체")
+        for title, link in get_news("Magnificent 7 AI Semiconductor", is_global=True, limit=7):
+            st.markdown(f"- [{title}]({link})")
+
+    st.write("---")
+    st.subheader("🔍 글로벌 뉴스 상세 검색")
+    us_news_keyword = st.text_input("찾고 싶은 영문 키워드를 입력하세요 (최대 20개 표출)", "S&P 500")
+    if us_news_keyword:
+        for title, link in get_news(us_news_keyword, is_global=True, limit=20):
+            st.markdown(f"🔹 [{title}]({link})")
 
 with tabs[5]:
     st.subheader("🌏 주요 아시아 증시 지표 (최근 3개월 흐름)")
@@ -212,5 +252,4 @@ with tabs[5]:
         st.markdown("### 🇹🇼 가권 지수")
         t, d, p = get_metric("^TWII")
         st.metric(label="대만 증시", value=f"{t:,.2f}", delta=f"{d:,.2f} ({p:+.2f}%)")
-        chart_data = get_chart_data("^TWII")
-        if chart_data is not None: st.line_chart(chart_data)
+        chart_data
