@@ -5,7 +5,7 @@ import yfinance as yf
 st.set_page_config(page_title="여의도 가고싶다 대시보드", page_icon="📈", layout="wide")
 
 st.title("📈 Yeouido Gagosipda - 매크로 & 증시 시황판")
-st.markdown("일일 증시 시황판")
+st.markdown(일일 증시 시황판")
 st.write("---")
 
 # 자주 찾는 종목 이름-코드 맵핑
@@ -21,12 +21,11 @@ US_STOCKS = {
     "구글": "GOOGL", "Google": "GOOGL", "아마존": "AMZN", "Amazon": "AMZN", "메타": "META", "Meta": "META"
 }
 
-# (1) 핵심 지표 전일 대비 계산용 함수 (오류 방어막 추가)
+# (1) 핵심 지표 전일 대비 계산용 함수
 @st.cache_data
 def get_metric(ticker):
     try:
         data = yf.download(ticker, period="5d", progress=False)
-        # 데이터가 부족하면 0 처리해서 사이트 뻗는 것 방지
         if data.empty or len(data) < 2:
             return 0.0, 0.0, 0.0
         
@@ -40,7 +39,7 @@ def get_metric(ticker):
     except Exception:
         return 0.0, 0.0, 0.0
 
-# (2) ⭐️ 만능 개별 종목 분석기 함수 (오류 방어막 추가)
+# (2) ⭐️ 만능 개별 종목 분석기 함수
 def display_stock_detail(ticker_symbol):
     try:
         stock = yf.Ticker(ticker_symbol)
@@ -69,9 +68,10 @@ def display_stock_detail(ticker_symbol):
             
         st.write("---")
         
+        # 💡 여기가 바뀐 부분! (일봉이 맨 앞으로 왔어)
         chart_type = st.radio(
             "차트 종류 선택", 
-            ["분봉 (오늘 5분 단위)", "일봉 (최근 3개월)", "주봉 (최근 1년)", "월봉 (최근 5년)", "년봉 (전체)"], 
+            ["일봉 (최근 3개월)", "주봉 (최근 1년)", "월봉 (최근 5년)", "년봉 (전체)", "분봉 (오늘 5분 단위)"], 
             horizontal=True, 
             key=f"radio_{ticker_symbol}" 
         )
