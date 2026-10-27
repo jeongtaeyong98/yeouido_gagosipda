@@ -5,7 +5,7 @@ import yfinance as yf
 st.set_page_config(page_title="여의도 가고싶다 대시보드", page_icon="📈", layout="wide")
 
 st.title("📈 Yeouido Gagosipda - 매크로 & 증시 시황판")
-st.markdown("일일 증시 시황판")
+st.markdown("산업정보시스템공학과 & 경영학 인사이트가 담긴 나만의 일일 대시보드")
 st.write("---")
 
 # 자주 찾는 종목 이름-코드 맵핑
@@ -21,15 +21,20 @@ US_STOCKS = {
     "구글": "GOOGL", "Google": "GOOGL", "아마존": "AMZN", "Amazon": "AMZN", "메타": "META", "Meta": "META"
 }
 
-# (1) 핵심 지표 전일 대비 계산용 함수
+# (1) 핵심 지표 전일 대비 계산용 함수 (nan 제거 기능 추가)
 @st.cache_data
 def get_metric(ticker):
     try:
         data = yf.download(ticker, period="5d", progress=False)
-        if data.empty or len(data) < 2:
+        if data.empty:
             return 0.0, 0.0, 0.0
         
         close_data = data['Close'] if 'Close' in data else data
+        close_data = close_data.dropna() # 💡 핵심 해결책: nan(빈칸) 데이터 걸러내기
+        
+        if len(close_data) < 2:
+            return 0.0, 0.0, 0.0
+            
         today = float(close_data.iloc[-1].item() if hasattr(close_data.iloc[-1], 'item') else close_data.iloc[-1])
         yesterday = float(close_data.iloc[-2].item() if hasattr(close_data.iloc[-2], 'item') else close_data.iloc[-2])
         
@@ -45,18 +50,25 @@ def get_chart_data(ticker, period="3mo"):
     try:
         data = yf.download(ticker, period=period, progress=False)
         if data.empty: return None
-        return data['Close'] if 'Close' in data else data
+        close_data = data['Close'] if 'Close' in data else data
+        return close_data.dropna() # 💡 차트에서도 nan 제거
     except:
         return None
 
-# (3) ⭐️ 만능 개별 종목 분석기 함수
+# (3) ⭐️ 만능 개별 종목 분석기 함수 (nan 제거 기능 추가)
 def display_stock_detail(ticker_symbol):
     try:
         stock = yf.Ticker(ticker_symbol)
         hist_5d = stock.history(period="5d")
         
-        if hist_5d.empty or len(hist_5d) < 2:
+        if hist_5d.empty:
             st.error("데이터를 충분히 불러오지 못했습니다. 종목 코드나 이름을 다시 확인해 주세요.")
+            return
+            
+        hist_5d = hist_5d.dropna(subset=['Close']) # 💡 개별 종목에서도 nan 제거
+        
+        if len(hist_5d) < 2:
+            st.error("최근 거래일 데이터가 부족합니다.")
             return
             
         today_close = float(hist_5d['Close'].iloc[-1])
@@ -96,6 +108,8 @@ def display_stock_detail(ticker_symbol):
         else:
             df_chart = stock.history(period="max", interval="3mo")
             
+        df_chart = df_chart.dropna(subset=['Close'])
+            
         if not df_chart.empty:
             st.markdown("**📈 주가 추이**")
             st.line_chart(df_chart['Close'])
@@ -111,7 +125,7 @@ def display_stock_detail(ticker_symbol):
 tabs = st.tabs(["1️⃣ 핵심 지표", "2️⃣ 🇰🇷 한국 증시", "3️⃣ 🇰🇷 한국 뉴스", "4️⃣ 🇺🇸 미국 증시", "5️⃣ 🌍 글로벌 뉴스", "6️⃣ 🌏 아시아 증시"])
 
 # ==========================================
-# 1페이지: 핵심 지표 (4열 배치로 넓게 사용)
+# 1페이지: 핵심 지표
 # ==========================================
 with tabs[0]:
     st.subheader("글로벌 핵심 매크로 & 증시 지표")
@@ -139,7 +153,6 @@ with tabs[0]:
         t, d, p = get_metric('^IXIC')
         st.metric(label="🇺🇸 NASDAQ", value=f"{t:,.2f}", delta=f"{d:,.2f} ({p:+.2f}%)")
         
-        # 한국 국채 10년물은 yfinance에서 누락되는 경우가 잦아 방어 코드 적용
         t, d, p = get_metric('KR10YT=RR') 
         if t == 0.0:
             st.metric(label="📊 한국 10년물 국채 금리", value="API 연동 필요", delta="-")
@@ -181,7 +194,7 @@ with tabs[4]:
     st.warning("🚧 [업데이트 예정] 해외 뉴스 API를 연동할 공간입니다.")
 
 # ==========================================
-# 6페이지: 아시아 증시 (차트 추가)
+# 6페이지: 아시아 증시
 # ==========================================
 with tabs[5]:
     st.subheader("🌏 주요 아시아 증시 지표 (최근 3개월 흐름)")
