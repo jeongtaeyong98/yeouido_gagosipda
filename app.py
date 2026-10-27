@@ -5,7 +5,7 @@ import yfinance as yf
 st.set_page_config(page_title="여의도 가고싶다 대시보드", page_icon="📈", layout="wide")
 
 st.title("📈 Yeouido Gagosipda - 매크로 & 증시 시황판")
-st.markdown("산업정보시스템공학과 & 경영학 인사이트가 담긴 나만의 일일 대시보드")
+st.markdown("일일 시황판")
 st.write("---")
 
 # 야후 파이낸스 데이터 불러오기 함수
