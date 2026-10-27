@@ -8,9 +8,9 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 from deep_translator import GoogleTranslator
 
-st.set_page_config(page_title="정태용 대시보드", page_icon="📈", layout="wide")
+st.set_page_config(page_title="여의도 가고싶다 대시보드", page_icon="📈", layout="wide")
 st.title("📈 Yeouido Gagosipda - 매크로 & 증시 시황판")
-st.markdown("일일 대시보드")
+st.markdown("산업정보시스템공학과 & 경영학 인사이트가 담긴 나만의 일일 대시보드")
 st.write("---")
 
 KR_STOCKS = {
@@ -43,48 +43,45 @@ def get_metric(ticker):
         today = float(close_data.iloc[-1].item() if hasattr(close_data.iloc[-1], 'item') else close_data.iloc[-1])
         yesterday = float(close_data.iloc[-2].item() if hasattr(close_data.iloc[-2], 'item') else close_data.iloc[-2])
         return today, today - yesterday, ((today - yesterday) / yesterday) * 100 if yesterday != 0 else 0
-    except:
-        return 0.0, 0.0, 0.0
+    except: return 0.0, 0.0, 0.0
 
 @st.cache_data(ttl=300)
 def get_chart_data(ticker, period="3mo"):
     try:
         data = yf.download(ticker, period=period, progress=False)
         return data['Close'].dropna() if not data.empty and 'Close' in data else None
-    except:
-        return None
+    except: return None
 
-# 💡 함수 이름 변경으로 기존 영어 캐시 삭제 & 번역 안정성 강화
-@st.cache_data(ttl=600, show_spinner=False) 
-def get_reuters_news(keyword, is_global=False, limit=20):
+@st.cache_data(ttl=600, show_spinner=False)
+def get_kr_news_only(keyword, limit=7):
     try:
-        if is_global: 
-            url = f"https://news.google.com/rss/search?q={urllib.parse.quote(keyword)}&hl=en-US&gl=US&ceid=US:en"
-        else: 
-            url = f"https://news.google.com/rss/search?q={urllib.parse.quote(keyword)}&hl=ko&gl=KR&ceid=KR:ko"
-            
+        url = f"https://news.google.com/rss/search?q={urllib.parse.quote(keyword)}&hl=ko&gl=KR&ceid=KR:ko"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req) as response:
-            xml_data = response.read()
-            
-        root = ET.fromstring(xml_data)
-        news_list = []
-        translator = GoogleTranslator(source='en', target='ko') # 번역기 엔진 명시적 세팅
+            root = ET.fromstring(response.read())
+        return [(item.find('title').text, item.find('link').text) for item in root.findall('.//item')[:limit]]
+    except: return []
+
+@st.cache_data(ttl=600, show_spinner=False)
+def get_global_news_translated(keyword, limit=7):
+    try:
+        url = f"https://news.google.com/rss/search?q={urllib.parse.quote(keyword)}&hl=en-US&gl=US&ceid=US:en"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req) as response:
+            root = ET.fromstring(response.read())
         
+        news_list = []
         for item in root.findall('.//item')[:limit]:
-            title = item.find('title').text
+            eng_title = item.find('title').text
             link = item.find('link').text
-            
-            if is_global:
-                try:
-                    title = translator.translate(title)
-                except:
-                    pass # 간혹 번역 에러가 나면 원문(영어) 유지
-                    
-            news_list.append((title, link))
+            try:
+                ko_title = GoogleTranslator(source='en', target='ko').translate(eng_title)
+                ko_title = ko_title.replace(" - 로이터", "").replace(" - Reuters", "") 
+            except:
+                ko_title = f"[번역지연] {eng_title}" 
+            news_list.append((ko_title, link))
         return news_list
-    except:
-        return []
+    except: return []
 
 def display_stock_detail(ticker_symbol):
     try:
@@ -171,42 +168,46 @@ with tabs[1]:
     kr_input = st.text_input("종목명/코드 입력 (예: SK하이닉스)", "삼성전자")
     if kr_input: display_stock_detail(KR_STOCKS.get(kr_input, kr_input))
 
+# 💡 3번 탭: 4분할 레이아웃으로 변경 및 글로벌 매크로(정치/외교) 열 추가 완료
 with tabs[2]:
     st.subheader("📰 오늘의 한국 경제 핵심 테마")
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown("### 🏦 매크로 & 무역")
-        for title, link in get_reuters_news("금리 환율 수출", is_global=False, limit=7): st.markdown(f"- [{title}]({link})")
+        for title, link in get_kr_news_only("금리 환율 수출", limit=7): st.markdown(f"- [{title}]({link})")
     with col2:
         st.markdown("### 📈 증시 & 수급")
-        for title, link in get_reuters_news("코스피 외국인 기관", is_global=False, limit=7): st.markdown(f"- [{title}]({link})")
+        for title, link in get_kr_news_only("코스피 외국인 기관", limit=7): st.markdown(f"- [{title}]({link})")
     with col3:
         st.markdown("### 🚀 주도 산업 (AI·바이오)")
-        for title, link in get_reuters_news("반도체 AI FDA", is_global=False, limit=7): st.markdown(f"- [{title}]({link})")
+        for title, link in get_kr_news_only("반도체 AI FDA", limit=7): st.markdown(f"- [{title}]({link})")
+    with col4:
+        st.markdown("### 🌎 글로벌 정치·외교")
+        # 기사가 잘 잡히도록 OR 명령어 조합
+        for title, link in get_kr_news_only("트럼프 OR 베센트 OR 케빈워시 OR 미국 OR 중국 OR 유럽", limit=7): st.markdown(f"- [{title}]({link})")
 
-# 💡 5번 탭: source:"Reuters" 명령어로 글로벌 뉴스 출처를 로이터로 좁히고 한글로 번역
 with tabs[3]:
     us_input = st.text_input("종목명/티커 입력 (예: TSLA)", "애플")
     if us_input: display_stock_detail(US_STOCKS.get(us_input, us_input))
 
 with tabs[4]:
     st.subheader("🌍 로이터 통신 (Reuters) 글로벌 경제 속보")
-    st.info("💡 로이터 통신의 원문 기사를 실시간으로 선별하여 한글로 번역 표출합니다.")
+    st.info("💡 실시간 번역 중입니다. (기사당 약 0.5초 소요)")
     col1, col2, col3 = st.columns(3)
     
     with col1:
         st.markdown("### 🏦 Fed & 경제 지표")
-        for title, link in get_reuters_news('source:"Reuters" Fed OR FOMC OR CPI OR PCE', is_global=True, limit=7): 
+        for title, link in get_global_news_translated('source:"Reuters" Fed OR FOMC OR CPI OR PCE', limit=7): 
             st.markdown(f"- [{title}]({link})")
             
     with col2:
         st.markdown("### 📉 뉴욕 증시 & 국채")
-        for title, link in get_reuters_news('source:"Reuters" Nasdaq OR "S&P 500" OR Treasury', is_global=True, limit=7): 
+        for title, link in get_global_news_translated('source:"Reuters" Nasdaq OR "S&P 500" OR Treasury', limit=7): 
             st.markdown(f"- [{title}]({link})")
             
     with col3:
         st.markdown("### 💻 M7 & AI 반도체")
-        for title, link in get_reuters_news('source:"Reuters" "Magnificent 7" OR AI OR Semiconductor', is_global=True, limit=7): 
+        for title, link in get_global_news_translated('source:"Reuters" "Magnificent 7" OR AI OR Semiconductor', limit=7): 
             st.markdown(f"- [{title}]({link})")
 
 with tabs[5]:
@@ -247,4 +248,4 @@ with tabs[7]:
     with col3:
         st.markdown("### 🇹🇼 가권 지수")
         t, d, p = get_metric("^TWII")
-        st.metric("대만 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
+        st.metric("대만 증시", f"{t:,.2f
