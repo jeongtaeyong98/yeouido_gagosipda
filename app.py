@@ -5,6 +5,8 @@ import datetime
 import urllib.request
 import urllib.parse
 import xml.etree.ElementTree as ET
+import pandas as pd
+from deep_translator import GoogleTranslator
 
 # 웹페이지 기본 설정
 st.set_page_config(page_title="여의도 가고싶다 대시보드", page_icon="📈", layout="wide")
@@ -40,10 +42,8 @@ def get_metric(ticker):
             close_data = close_data.dropna()
 
         if len(close_data) < 2: return 0.0, 0.0, 0.0
-        
         today = float(close_data.iloc[-1].item() if hasattr(close_data.iloc[-1], 'item') else close_data.iloc[-1])
         yesterday = float(close_data.iloc[-2].item() if hasattr(close_data.iloc[-2], 'item') else close_data.iloc[-2])
-        
         diff = today - yesterday
         pct = (diff / yesterday) * 100 if yesterday != 0 else 0
         return today, diff, pct
@@ -59,6 +59,7 @@ def get_chart_data(ticker, period="3mo"):
     except:
         return None
 
+# ⭐️ 실시간 한글 번역 기능이 추가된 뉴스 크롤러
 @st.cache_data(ttl=600) 
 def get_news(keyword, is_global=False, limit=20):
     try:
@@ -73,9 +74,19 @@ def get_news(keyword, is_global=False, limit=20):
             
         root = ET.fromstring(xml_data)
         news_list = []
+        translator = GoogleTranslator(source='auto', target='ko')
+        
         for item in root.findall('.//item')[:limit]:
             title = item.find('title').text
             link = item.find('link').text
+            
+            # 글로벌 뉴스일 경우 한국어로 번역 실행
+            if is_global:
+                try:
+                    title = translator.translate(title)
+                except:
+                    pass # 번역 에러 시 원문 유지
+                    
             news_list.append((title, link))
         return news_list
     except Exception as e:
@@ -87,14 +98,14 @@ def display_stock_detail(ticker_symbol):
         if is_kr:
             fdr_ticker = ticker_symbol.replace('.KS', '').replace('.KQ', '')
             df_recent = fdr.DataReader(fdr_ticker)[-5:]
-            if df_recent.empty or len(df_recent) < 2: return st.error("한국 주식 데이터를 불러오지 못했습니다.")
+            if df_recent.empty or len(df_recent) < 2: return st.error("데이터 오류")
             today_close = float(df_recent['Close'].iloc[-1])
             yesterday_close = float(df_recent['Close'].iloc[-2])
             vol = int(df_recent['Volume'].iloc[-1])
         else:
             stock = yf.Ticker(ticker_symbol)
             hist_5d = stock.history(period="5d").dropna(subset=['Close'])
-            if hist_5d.empty or len(hist_5d) < 2: return st.error("미국 주식 데이터를 불러오지 못했습니다.")
+            if hist_5d.empty or len(hist_5d) < 2: return st.error("데이터 오류")
             today_close = float(hist_5d['Close'].iloc[-1])
             yesterday_close = float(hist_5d['Close'].iloc[-2])
             vol = int(hist_5d['Volume'].iloc[-1])
@@ -114,7 +125,6 @@ def display_stock_detail(ticker_symbol):
         end_date = datetime.datetime.today()
         if is_kr:
             if "분봉" in chart_type:
-                st.info("💡 한국 주식의 분봉 차트는 야후 파이낸스의 지연 시세로 제공됩니다.")
                 df_chart = yf.Ticker(ticker_symbol).history(period="1d", interval="5m")
             elif "일봉" in chart_type: df_chart = fdr.DataReader(fdr_ticker, start=end_date - datetime.timedelta(days=90))
             elif "주봉" in chart_type: df_chart = fdr.DataReader(fdr_ticker, start=end_date - datetime.timedelta(days=365)).resample('W-FRI').agg({'Close':'last', 'Volume':'sum'})
@@ -134,11 +144,14 @@ def display_stock_detail(ticker_symbol):
             st.line_chart(df_chart['Close'])
             st.markdown("**📊 거래량**")
             st.bar_chart(df_chart['Volume'])
-        else: st.warning("해당 기간의 차트 데이터가 없습니다.")
-            
-    except Exception as e: st.error(f"데이터 처리 중 에러가 발생했습니다: {e}")
+        else: st.warning("데이터가 없습니다.")
+    except Exception as e: st.error(f"에러: {e}")
 
-tabs = st.tabs(["1️⃣ 핵심 지표", "2️⃣ 🇰🇷 한국 증시", "3️⃣ 🇰🇷 한국 뉴스", "4️⃣ 🇺🇸 미국 증시", "5️⃣ 🌍 글로벌 뉴스", "6️⃣ 🌏 아시아 증시"])
+# 총 8개 탭으로 구조 재편성
+tabs = st.tabs([
+    "1️⃣ 핵심 지표", "2️⃣ 🇰🇷 한국 증시", "3️⃣ 🇰🇷 한국 뉴스", "4️⃣ 🇺🇸 미국 증시", 
+    "5️⃣ 🌍 글로벌 뉴스", "6️⃣ 📅 🇰🇷 한국 일정", "7️⃣ 📅 🇺🇸 미국 일정", "8️⃣ 🌏 아시아 증시"
+])
 
 with tabs[0]:
     st.subheader("글로벌 핵심 매크로 & 증시 지표")
@@ -172,32 +185,18 @@ with tabs[1]:
         kr_ticker = KR_STOCKS.get(kr_input, kr_input)
         display_stock_detail(kr_ticker)
 
-# 💡 3번 탭: 네가 설정한 한국 뉴스 3열 (최적화 완료)
 with tabs[2]:
     st.subheader("📰 오늘의 한국 경제 핵심 테마")
     col1, col2, col3 = st.columns(3)
-    
     with col1:
         st.markdown("### 🏦 매크로 & 무역")
-        for title, link in get_news("금리 환율 수출", is_global=False, limit=7):
-            st.markdown(f"- [{title}]({link})")
-            
+        for title, link in get_news("금리 환율 수출", is_global=False, limit=7): st.markdown(f"- [{title}]({link})")
     with col2:
         st.markdown("### 📈 증시 & 수급")
-        for title, link in get_news("코스피 외국인 기관", is_global=False, limit=7):
-            st.markdown(f"- [{title}]({link})")
-            
+        for title, link in get_news("코스피 외국인 기관", is_global=False, limit=7): st.markdown(f"- [{title}]({link})")
     with col3:
         st.markdown("### 🚀 주도 산업 (AI·바이오)")
-        for title, link in get_news("반도체 AI FDA", is_global=False, limit=7):
-            st.markdown(f"- [{title}]({link})")
-            
-    st.write("---")
-    st.subheader("🔍 특정 테마 뉴스 상세 검색")
-    kr_news_keyword = st.text_input("찾고 싶은 키워드를 입력하세요 (최대 20개 표출)", "2차전지")
-    if kr_news_keyword:
-        for title, link in get_news(kr_news_keyword, is_global=False, limit=20):
-            st.markdown(f"🔹 [{title}]({link})")
+        for title, link in get_news("반도체 AI FDA", is_global=False, limit=7): st.markdown(f"- [{title}]({link})")
 
 with tabs[3]:
     st.subheader("🇺🇸 미국 증시 개별 종목 검색")
@@ -206,34 +205,54 @@ with tabs[3]:
         us_ticker = US_STOCKS.get(us_input, us_input)
         display_stock_detail(us_ticker)
 
-# 💡 5번 탭: 네가 설정한 글로벌 뉴스 3열 (영문 최적화 완료)
 with tabs[4]:
-    st.subheader("🌍 오늘의 글로벌 경제 핵심 테마")
+    st.subheader("🌍 오늘의 글로벌 경제 핵심 테마 (한글 자동번역)")
+    st.info("💡 미국 매체 원문 기사 제목을 실시간으로 한글로 번역하여 표출합니다.")
     col1, col2, col3 = st.columns(3)
-    
     with col1:
         st.markdown("### 🏦 Fed & 경제 지표")
-        for title, link in get_news("Fed FOMC CPI PCE", is_global=True, limit=7):
-            st.markdown(f"- [{title}]({link})")
-            
+        for title, link in get_news("Fed FOMC CPI PCE", is_global=True, limit=7): st.markdown(f"- [{title}]({link})")
     with col2:
         st.markdown("### 📉 뉴욕 증시 & 국채")
-        for title, link in get_news("Nasdaq S&P 500 Treasury", is_global=True, limit=7):
-            st.markdown(f"- [{title}]({link})")
-            
+        for title, link in get_news("Nasdaq S&P 500 Treasury", is_global=True, limit=7): st.markdown(f"- [{title}]({link})")
     with col3:
         st.markdown("### 💻 M7 & AI 반도체")
-        for title, link in get_news("Magnificent 7 AI Semiconductor", is_global=True, limit=7):
-            st.markdown(f"- [{title}]({link})")
+        for title, link in get_news("Magnificent 7 AI Semiconductor", is_global=True, limit=7): st.markdown(f"- [{title}]({link})")
 
-    st.write("---")
-    st.subheader("🔍 글로벌 뉴스 상세 검색")
-    us_news_keyword = st.text_input("찾고 싶은 영문 키워드를 입력하세요 (최대 20개 표출)", "S&P 500")
-    if us_news_keyword:
-        for title, link in get_news(us_news_keyword, is_global=True, limit=20):
-            st.markdown(f"🔹 [{title}]({link})")
-
+# 💡 6번 탭: 한국 실적 & 경제지표 일정 (프레임워크)
 with tabs[5]:
+    st.subheader("📅 🇰🇷 한국 주요 기업 실적 및 경제지표 일정")
+    st.warning("🚧 [데이터 한계] 실시간 컨센서스 및 매출/영업이익 상세 데이터는 유료 API(에프앤가이드 등)가 필요합니다. 아래는 데이터 연동을 위한 대시보드 UI 프레임워크입니다.")
+    
+    kr_schedule_data = {
+        "날짜": ["10/29 (예시)", "10/30 (예시)", "10/31 (예시)", "11/01 (예시)"],
+        "이벤트/기업명": ["삼성전자 3분기 실적", "한국은행 금통위 의사록", "SK하이닉스 실적발표", "10월 수출입동향 발표"],
+        "매출액(예상)": ["79조 원", "-", "18조 원", "-"],
+        "영업이익(예상)": ["9.1조 원", "-", "6.5조 원", "-"],
+        "순이익(예상)": ["8.5조 원", "-", "5.2조 원", "-"],
+        "컨센서스(Surprise/Shock)": ["Shock (-10.5%)", "-", "Surprise (+5.2%)", "-"],
+        "중요도": ["⭐⭐⭐", "⭐⭐", "⭐⭐⭐", "⭐⭐⭐"]
+    }
+    kr_df = pd.DataFrame(kr_schedule_data)
+    st.dataframe(kr_df, use_container_width=True, hide_index=True)
+
+# 💡 7번 탭: 미국 실적 & 경제지표 일정 (프레임워크)
+with tabs[6]:
+    st.subheader("📅 🇺🇸 미국 주요 기업 실적 및 경제지표 일정")
+    st.warning("🚧 [데이터 한계] 미국 M7 및 경제지표 상세 결과는 유료 API(인베스팅닷컴 등) 연동 후 표출 가능합니다. 아래는 UI 프레임워크입니다.")
+    
+    us_schedule_data = {
+        "날짜(한국시간)": ["10/30 22:30 (예시)", "10/31 05:00 (예시)", "11/01 05:00 (예시)", "11/01 21:30 (예시)"],
+        "이벤트/기업명": ["미국 3분기 GDP (예비치)", "Microsoft (MSFT) 실적", "Apple (AAPL) 실적", "미국 10월 비농업 고용지수"],
+        "매출/수치(예상)": ["3.0%", "$64.5B", "$94.2B", "110K"],
+        "이익/수치(실제)": ["발표 대기", "발표 대기", "발표 대기", "발표 대기"],
+        "컨센서스 부합 여부": ["-", "-", "-", "-"],
+        "중요도": ["⭐⭐⭐", "⭐⭐⭐", "⭐⭐⭐", "⭐⭐⭐"]
+    }
+    us_df = pd.DataFrame(us_schedule_data)
+    st.dataframe(us_df, use_container_width=True, hide_index=True)
+
+with tabs[7]:
     st.subheader("🌏 주요 아시아 증시 지표 (최근 3개월 흐름)")
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -252,4 +271,5 @@ with tabs[5]:
         st.markdown("### 🇹🇼 가권 지수")
         t, d, p = get_metric("^TWII")
         st.metric(label="대만 증시", value=f"{t:,.2f}", delta=f"{d:,.2f} ({p:+.2f}%)")
-        chart_data
+        chart_data = get_chart_data("^TWII")
+        if chart_data is not None: st.line_chart(chart_data)
