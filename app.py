@@ -7,9 +7,9 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 import pandas as pd
 
-st.set_page_config(page_title="여의도 가고싶다 대시보드", page_icon="📈", layout="wide")
+st.set_page_config(page_title="정태용 대시보드", page_icon="📈", layout="wide")
 st.title("📈 Yeouido Gagosipda - 매크로 & 증시 시황판")
-st.markdown("산업정보시스템공학과 & 경영학 인사이트가 담긴 나만의 일일 대시보드")
+st.markdown("일일 대시보드")
 st.write("---")
 
 KR_STOCKS = {
@@ -153,16 +153,16 @@ with tabs[2]:
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown("### 🏦 매크로 & 무역")
-        for title, link in get_latest_news("금리 OR 환율 OR 수출", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+        for title, link in get_latest_news("금리 OR 환율 OR 수출 OR 부동산", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col2:
         st.markdown("### 📈 증시 & 수급")
-        for title, link in get_latest_news("코스피 OR 코스닥 OR 외국인순매수", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+        for title, link in get_latest_news("코스피 OR 코스닥 OR 외국인 OR IPO", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col3:
-        st.markdown("### 🚀 주도 산업 (AI·바이오)")
-        for title, link in get_latest_news("AI반도체 OR 2차전지 OR 바이오 FDA", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+        st.markdown("### 🚀 주도 산업 ")
+        for title, link in get_latest_news("AI OR 반도체 OR 광통신 OR 우주 OR 2차전지 OR FDA", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col4:
         st.markdown("### 🌎 글로벌 정치·외교")
-        for title, link in get_latest_news("트럼프 OR 베센트 OR 케빈워시 OR 무역관세", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+        for title, link in get_latest_news("트럼프 OR 베센트 OR 케빈워시 OR 관세 OR 미국 OR 연준", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
 
 with tabs[3]:
     us_input = st.text_input("종목명/티커 입력 (예: TSLA)", "애플")
