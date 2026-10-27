@@ -7,9 +7,9 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 import pandas as pd
 
-st.set_page_config(page_title="여의도 가고싶다 대시보드", page_icon="📈", layout="wide")
+st.set_page_config(page_title="정태용 대시보드", page_icon="📈", layout="wide")
 st.title("📈 Yeouido Gagosipda - 매크로 & 증시 시황판")
-st.markdown("산업정보시스템공학과 & 경영학 인사이트가 담긴 나만의 일일 대시보드")
+st.markdown("일일 대시보드")
 st.write("---")
 
 KR_STOCKS = {
