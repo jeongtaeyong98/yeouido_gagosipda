@@ -7,9 +7,9 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 import pandas as pd
 
-st.set_page_config(page_title="TY Alpha Terminal", page_icon="📈", layout="wide")
+st.set_page_config(page_title="TY Dashboard", page_icon="📈", layout="wide")
 st.title("📈 TY_HTS - 매크로 & 증시 시황판")
-st.markdown(" 일일 대시보드")
+st.markdown("일일 대시보드")
 st.write("---")
 
 KR_STOCKS = {
@@ -163,16 +163,16 @@ with tabs[2]:
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown("### 🏦 매크로 & 무역")
-        for title, link in get_latest_news("금리 OR 환율 OR 수출", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+        for title, link in get_latest_news("금리 OR 환율 OR 수출 OR 부동산", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col2:
         st.markdown("### 📈 증시 & 수급")
-        for title, link in get_latest_news("코스피 OR 코스닥 OR 외국인순매수", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+        for title, link in get_latest_news("코스피 OR 코스닥 OR 외국인", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col3:
-        st.markdown("### 🚀 주도 산업 (AI·바이오)")
-        for title, link in get_latest_news("AI반도체 OR 2차전지 OR 바이오 FDA", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+        st.markdown("### 🚀 주도 산업")
+        for title, link in get_latest_news("AI OR 로봇 OR 피지컬AI OR 반도체 OR 광통신 OR 우주 OR 전력 OR FDA OR 원자재", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col4:
         st.markdown("### 🌎 글로벌 정치·외교")
-        for title, link in get_latest_news("트럼프 OR 베센트 OR 케빈워시 OR 무역관세", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+        for title, link in get_latest_news("트럼프 OR 베센트 OR 케빈워시 OR 관세 OR 미국 OR 중국", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
 
 # 💡 4번 탭: 미국 증시 티커 검색 지원 및 소문자 자동 변환
 with tabs[3]:
@@ -187,13 +187,13 @@ with tabs[4]:
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown("### 🏦 Fed & 경제 지표")
-        for title, link in get_latest_news("미국 연준 OR FOMC OR CPI OR 파월", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+        for title, link in get_latest_news("연준 OR FOMC OR CPI OR PPI OR PCE OR 워시 OR 트럼프 OR 미국 OR 중국", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col2:
         st.markdown("### 📉 뉴욕 증시 & 국채")
-        for title, link in get_latest_news("뉴욕증시 OR S&P500 OR 나스닥 OR 미 국채금리", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+        for title, link in get_latest_news("뉴욕증시 OR S&P500 OR 나스닥 OR 미 국채금리 OR M7 OR 빅테크", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col3:
         st.markdown("### 💻 M7 & AI 반도체")
-        for title, link in get_latest_news("엔비디아 OR 테슬라 OR 매그니피센트7 OR 빅테크", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+        for title, link in get_latest_news("머스크 OR 젠슨황 OR Physical AI OR 로봇 OR AI OR 반도체 OR 광통신 OR 데이터센터 OR 전력", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
 
 with tabs[5]:
     st.subheader("📅 🇰🇷 한국 주요 기업 실적 및 경제지표 일정")
