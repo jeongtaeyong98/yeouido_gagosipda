@@ -84,14 +84,14 @@ def display_stock_detail(ticker_symbol):
         if is_kr:
             fdr_ticker = ticker_symbol.replace('.KS', '').replace('.KQ', '')
             df_recent = fdr.DataReader(fdr_ticker)[-5:]
-            if df_recent.empty or len(df_recent) < 2: return st.error("해당 종목을 찾을 수 없습니다.")
+            if df_recent.empty or len(df_recent) < 2: return st.error("해당 종목을 찾을 수 없습니다. 이름이나 코드를 확인해주세요.")
             today_close = float(df_recent['Close'].iloc[-1])
             yesterday_close = float(df_recent['Close'].iloc[-2])
             vol = int(df_recent['Volume'].iloc[-1])
         else:
             stock = yf.Ticker(ticker_symbol)
             hist_5d = stock.history(period="5d").dropna(subset=['Close'])
-            if hist_5d.empty or len(hist_5d) < 2: return st.error("해당 티커(Ticker)를 찾을 수 없습니다.")
+            if hist_5d.empty or len(hist_5d) < 2: return st.error("해당 티커(Ticker)를 찾을 수 없습니다. 영문 철자를 확인해주세요.")
             today_close = float(hist_5d['Close'].iloc[-1])
             yesterday_close = float(hist_5d['Close'].iloc[-2])
             vol = int(hist_5d['Volume'].iloc[-1])
@@ -156,7 +156,7 @@ with tabs[0]:
                     global_news = get_latest_news("뉴욕증시 OR 연준 OR 트럼프 OR 빅테크", limit=3)
                     st.write("✅ 2단계 완료!")
                     
-                    st.write("⏳ 3단계: 사용 가능한 AI 모델 자동 탐색 및 연결 중...")
+                    st.write("⏳ 3단계: 구글 AI 서버 최적 모델 자동 연결 중...")
                     news_text = "한국 이슈:\n" + "\n".join([n[0] for n in kr_news]) + "\n\n글로벌 이슈:\n" + "\n".join([n[0] for n in global_news])
                     metric_text = f"KOSPI: {k_t:,.2f} ({k_p:+.2f}%), S&P 500: {s_t:,.2f} ({s_p:+.2f}%), 원/달러 환율: {krw_t:,.2f}원"
                     
@@ -180,43 +180,54 @@ with tabs[0]:
                     - 필수 해시태그 포함 (#TY_HTS #증시시황 #매크로분석 #여의도입성)
                     """
                     
-                    # 💡 궁극의 해결책: 하드코딩 완전 폐기 및 생존 모델 릴레이 탐색
                     genai.configure(api_key=api_key, transport='rest')
                     
-                    # 현재 API 키로 접근 가능한 모든 모델 긁어오기
-                    available_models = [m.name.replace('models/', '') for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-                    
-                    if not available_models:
-                        raise Exception("API 키로 접근 가능한 생성형 AI 모델이 없습니다.")
-                    
-                    # 빠르고 가벼운 flash 모델을 최우선으로 배치, 없으면 나머지 모델들 배치
-                    flash_models = [m for m in available_models if 'flash' in m.lower()]
-                    models_to_try = flash_models + [m for m in available_models if m not in flash_models]
+                    # 💡 시각적 불안감을 없앤 조용한 '스텔스 모드' 우회 탐색
+                    models_to_try = [
+                        "gemini-1.5-flash",
+                        "gemini-1.5-flash-latest",
+                        "gemini-1.5-pro",
+                        "gemini-pro",
+                        "gemini-flash-latest"
+                    ]
                     
                     response = None
                     used_model = ""
                     
-                    # 작동하는 모델이 나올 때까지 차례대로 연결 시도
+                    # 실패 메시지 출력 없이 백그라운드에서 빠르게 순차 시도
                     for m_name in models_to_try:
                         try:
-                            st.write(f"🔄 [{m_name}] 모델 연결 시도 중...")
                             model = genai.GenerativeModel(m_name)
                             response = model.generate_content(prompt)
                             used_model = m_name
-                            break # 성공하면 즉시 루프 탈출
-                        except Exception as try_e:
-                            st.write(f"⚠️ [{m_name}] 연결 실패 (다음 모델로 넘어갑니다)")
+                            break
+                        except:
                             continue
                             
+                    # 만약 위 기본 리스트가 다 실패하면, 구글 서버에서 가져온 전체 목록으로 조용히 재시도
                     if not response:
-                        raise Exception("모든 AI 모델의 무료 할당량(Quota)이 소진되었거나 접근이 차단되었습니다.")
+                        try:
+                            for m in genai.list_models():
+                                if 'generateContent' in m.supported_generation_methods:
+                                    try:
+                                        m_name = m.name.replace('models/', '')
+                                        model = genai.GenerativeModel(m_name)
+                                        response = model.generate_content(prompt)
+                                        used_model = m_name
+                                        break
+                                    except:
+                                        continue
+                        except:
+                            pass
+                            
+                    if response:
+                        st.write("✅ 3단계 완료!")
+                        status.update(label="🎉 분석 성공!", state="complete", expanded=False)
+                        st.success(f"✅ AI 분석 완료! (연결 성공 모델: {used_model})")
+                        st.text_area("📋 생성된 피드 초안 (자유롭게 수정 후 복사하세요)", response.text, height=400)
+                    else:
+                        raise Exception("현재 구글 무료 API 한도가 모두 소진되었거나 서버 점검 중입니다. 잠시 후 다시 시도해주세요.")
                         
-                    st.write(f"✅ 3단계 완료! (최종 사용된 모델: {used_model})")
-                    
-                    status.update(label="🎉 분석 성공!", state="complete", expanded=False)
-                    st.success("✅ 분석 완료! 아래 텍스트를 복사하여 수정 후 인스타그램에 활용하세요.")
-                    st.text_area("📋 생성된 피드 초안 (자유롭게 수정 후 복사하세요)", response.text, height=400)
-                    
                 except Exception as e:
                     status.update(label="❌ 에러 발생", state="error", expanded=True)
                     st.error(f"상세 에러 내용: {e}")
@@ -270,46 +281,4 @@ with tabs[3]:
         for title, link in get_latest_news("AI OR 로봇 OR 피지컬AI OR 반도체 OR 광통신 OR 우주 OR 전력 OR FDA OR 원자재", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col4:
         st.markdown("### 🌎 글로벌 정치·외교")
-        for title, link in get_latest_news("트럼프 OR 베센트 OR 케빈워시 OR 관세 OR 미국 OR 중국", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
-
-with tabs[4]:
-    us_input = st.text_input("🔍 종목명(빅테크) 또는 영어 티커 입력 (예: 애플, PLTR, ARM, smci)", "애플")
-    if us_input:
-        search_ticker = US_STOCKS.get(us_input, us_input.upper())
-        display_stock_detail(search_ticker)
-
-with tabs[5]:
-    st.subheader("🌍 글로벌 경제 속보 (국내 주요 경제지 보도 기준)")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("### 🏦 Fed & 경제 지표")
-        for title, link in get_latest_news("연준 OR FOMC OR CPI OR PPI OR PCE OR 워시 OR 트럼프 OR 미국 OR 중국", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
-    with col2:
-        st.markdown("### 📉 뉴욕 증시 & 국채")
-        for title, link in get_latest_news("뉴욕증시 OR S&P500 OR 나스닥 OR 미 국채금리 OR M7 OR 빅테크", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
-    with col3:
-        st.markdown("### 💻 M7 & AI 반도체")
-        for title, link in get_latest_news("머스크 OR 젠슨황 OR Physical AI OR 로봇 OR AI OR 반도체 OR 광통신 OR 데이터센터 OR 전력", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
-
-with tabs[6]:
-    st.subheader("📅 🇰🇷 한국 주요 기업 실적 및 경제지표 일정")
-    for title, link in get_latest_news("증시 일정 OR 코스피 실적 발표 OR 금통위", limit=10, period="7d"): st.markdown(f"🔹 [{title}]({link})")
-
-with tabs[7]:
-    st.subheader("📅 🇺🇸 미국 주요 기업 실적 및 경제지표 일정")
-    for title, link in get_latest_news("미국 증시 일정 OR 실적 OR FOMC OR CPI OR PPI OR PCE", limit=10, period="7d"): st.markdown(f"🔹 [{title}]({link})")
-
-with tabs[8]:
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("### 🇯🇵 니케이 225")
-        t, d, p = get_metric("^N225")
-        st.metric("일본 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
-    with col2:
-        st.markdown("### 🇨🇳 상해 종합")
-        t, d, p = get_metric("000001.SS")
-        st.metric("중국 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
-    with col3:
-        st.markdown("### 🇹🇼 가권 지수")
-        t, d, p = get_metric("^TWII")
-        st.metric("대만 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
+        for title, link in get_latest
