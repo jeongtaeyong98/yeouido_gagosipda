@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 import pandas as pd
 import json
 import requests
-import time  # 503 에러 시 대기를 위한 라이브러리 추가
+import time
 
 st.set_page_config(page_title="TY Dashboard", page_icon="📈", layout="wide")
 
@@ -84,40 +84,63 @@ def get_latest_news(keyword, limit=7, period="1d"):
     except:
         return []
 
-# 💡 새롭게 교체된 안정화 및 503 자동 재시도 함수
-def generate_ai_desk_summary(prompt: str, key: str) -> str:
-    # 트래픽 허용량이 가장 높고 빠른 1.5-flash 모델 사용
-    model_name = "gemini-1.5-flash"
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+def generate_ai_desk_summary(prompt: str, key: str) -> tuple:
+    """API 키에 허용된 모델을 자동 탐색하고, 503 에러 시 재시도하는 통합 함수"""
+    # 1단계: 내 API 키로 접근 가능한 모델 목록 자동 조회
+    list_url = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
+    
+    try:
+        list_res = requests.get(list_url, timeout=10)
+        if list_res.status_code != 200:
+            raise Exception(f"모델 목록 조회 실패: {list_res.text}")
+            
+        models_data = list_res.json().get("models", [])
+        available_models = [
+            m["name"].split("/")[-1] for m in models_data 
+            if "generateContent" in m.get("supportedGenerationMethods", [])
+        ]
+        
+        if not available_models:
+            raise Exception("해당 API 키로 텍스트 생성을 지원하는 모델이 없습니다.")
+            
+        flash_models = [m for m in available_models if "flash" in m.lower()]
+        target_model = flash_models[0] if flash_models else available_models[0]
+        
+    except Exception:
+        # 목록 조회 예외 발생 시 기본 폴백 모델
+        target_model = "gemini-1.5-flash"
+
+    # 2단계: 찾아낸 target_model로 텍스트 생성 시도 (503 방어)
+    gen_url = f"https://generativelanguage.googleapis.com/v1beta/models/{target_model}:generateContent?key={key}"
     headers = {"Content-Type": "application/json"}
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     
     max_retries = 3
     for attempt in range(max_retries):
         try:
-            response = requests.post(url, headers=headers, json=payload, timeout=15)
+            response = requests.post(gen_url, headers=headers, json=payload, timeout=15)
             
             if response.status_code == 200:
-                result = response.json()
-                return result["candidates"][0]["content"]["parts"][0]["text"]
-            
+                text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
+                return text, target_model
+                
             elif response.status_code == 503:
                 if attempt < max_retries - 1:
-                    time.sleep(2) # 서버 과부하시 2초 대기 후 재시도
+                    time.sleep(2) # 2초 대기
                     continue
                 else:
-                    raise Exception("구글 서버 트래픽이 폭주하고 있습니다. 잠시 후 다시 시도해주세요.")
-            
+                    raise Exception("구글 서버 트래픽 폭주(503). 잠시 후 다시 시도해주세요.")
+                    
             else:
-                raise Exception(f"API 통신 에러 ({response.status_code}): {response.text}")
+                raise Exception(f"생성 에러 ({response.status_code}): {response.text}")
                 
         except requests.exceptions.Timeout:
             if attempt < max_retries - 1:
                 time.sleep(2)
                 continue
             raise Exception("API 응답 시간이 초과되었습니다.")
-
-    return "시황 요약을 불러오는 데 실패했습니다."
+            
+    raise Exception("시황 요약을 불러오는 데 실패했습니다.")
 
 def display_stock_detail(ticker_symbol):
     try:
@@ -203,7 +226,7 @@ with tabs[0]:
                     global_news = get_latest_news("뉴욕증시 OR 연준 OR 트럼프 OR 빅테크", limit=3)
                     st.write("✅ 2단계 완료!")
                     
-                    st.write("⏳ 3단계: 구글 AI 서버와 통신 중...")
+                    st.write("⏳ 3단계: 허용된 구글 AI 모델 자동 탐색 및 통신 중...")
                     news_text = "한국 이슈:\n" + "\n".join([n[0] for n in kr_news]) + "\n\n글로벌 이슈:\n" + "\n".join([n[0] for n in global_news])
                     metric_text = f"KOSPI: {k_t:,.2f} ({k_p:+.2f}%), S&P 500: {s_t:,.2f} ({s_p:+.2f}%), 원/달러 환율: {krw_t:,.2f}원"
                     
@@ -220,11 +243,10 @@ with tabs[0]:
 1. 오늘의 매크로 & 시황 3줄 요약
 2. 인스타그램 피드 텍스트 초안 (친근하게, 질문 유도, 필수 해시태그 #TY_HTS #증시시황 #매크로분석 #여의도입성)
 """
+                    # 변경된 함수 호출 구조 적용
+                    ai_text, used_model = generate_ai_desk_summary(prompt, api_key)
                     
-                    # 수정한 AI 호출 함수 실행
-                    ai_text = generate_ai_desk_summary(prompt, api_key)
-                    
-                    st.write("✅ 3단계 완료! (사용된 모델: gemini-1.5-flash)")
+                    st.write(f"✅ 3단계 완료! (자동 매칭된 모델: {used_model})")
                     status.update(label="🎉 분석 성공!", state="complete", expanded=False)
                     
                     st.success("✅ AI 분석 완료!")
