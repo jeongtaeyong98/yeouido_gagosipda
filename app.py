@@ -37,7 +37,6 @@ US_STOCKS = {
     "구글": "GOOGL", "Google": "GOOGL", "아마존": "AMZN", "Amazon": "AMZN", "메타": "META", "Meta": "META"
 }
 
-# 💡 KRX(한국거래소) 전 종목 이름-코드 매핑
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_krx_mapping():
     try:
@@ -144,7 +143,7 @@ with tabs[0]:
         if not api_key:
             st.error("좌측 사이드바에 Gemini API Key를 먼저 입력해주세요. (입력 후 Enter 필수)")
         else:
-            with st.spinner("가장 안정적인 AI 모델을 스캔하고 뉴스를 분석 중입니다. (약 10초 소요)..."):
+            with st.spinner("최신 지수와 뉴스를 읽고 분석 중입니다. (약 10초 소요)..."):
                 try:
                     k_t, k_d, k_p = get_metric('^KS11')
                     s_t, s_d, s_p = get_metric('^GSPC')
@@ -176,28 +175,12 @@ with tabs[0]:
                     - 필수 해시태그 포함 (#TY_HTS #증시시황 #매크로분석 #여의도입성)
                     """
                     
-                    # 💡 구글 AI 완벽 연동: 내 API 키로 접속 가능한 '무료(flash)' 모델을 실시간으로 추적해서 자동 연결
+                    # 💡 구글 에러 메시지에서 직접 요구한 정확한 최신 모델명으로 고정!
                     genai.configure(api_key=api_key)
-                    
-                    valid_models = []
-                    for m in genai.list_models():
-                        if 'generateContent' in m.supported_generation_methods:
-                            valid_models.append(m.name.replace('models/', ''))
-                            
-                    # Pro는 쿼터 에러가 날 수 있으므로 빠르고 무료인 Flash 계열을 1순위로 탐색
-                    flash_models = [m for m in valid_models if 'flash' in m.lower()]
-                    
-                    if flash_models:
-                        target_model = flash_models[0]
-                    elif valid_models:
-                        target_model = valid_models[0]
-                    else:
-                        raise ValueError("현재 사용 가능한 구글 AI 모델이 없습니다.")
-                        
-                    model = genai.GenerativeModel(target_model)
+                    model = genai.GenerativeModel('gemini-3.8-flash')
                     response = model.generate_content(prompt)
                     
-                    st.success(f"✅ 분석 완료! (사용된 AI 모델: {target_model}) 아래 텍스트를 복사하여 수정 후 인스타그램에 활용하세요.")
+                    st.success("✅ 분석 완료! 아래 텍스트를 복사하여 수정 후 인스타그램에 활용하세요.")
                     st.text_area("📋 생성된 피드 초안 (자유롭게 수정 후 복사하세요)", response.text, height=400)
                     
                 except Exception as e:
