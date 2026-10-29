@@ -84,14 +84,14 @@ def display_stock_detail(ticker_symbol):
         if is_kr:
             fdr_ticker = ticker_symbol.replace('.KS', '').replace('.KQ', '')
             df_recent = fdr.DataReader(fdr_ticker)[-5:]
-            if df_recent.empty or len(df_recent) < 2: return st.error("해당 종목을 찾을 수 없습니다. 이름이나 코드를 확인해주세요.")
+            if df_recent.empty or len(df_recent) < 2: return st.error("해당 종목을 찾을 수 없습니다.")
             today_close = float(df_recent['Close'].iloc[-1])
             yesterday_close = float(df_recent['Close'].iloc[-2])
             vol = int(df_recent['Volume'].iloc[-1])
         else:
             stock = yf.Ticker(ticker_symbol)
             hist_5d = stock.history(period="5d").dropna(subset=['Close'])
-            if hist_5d.empty or len(hist_5d) < 2: return st.error("해당 티커(Ticker)를 찾을 수 없습니다. 영문 철자를 확인해주세요.")
+            if hist_5d.empty or len(hist_5d) < 2: return st.error("해당 티커(Ticker)를 찾을 수 없습니다.")
             today_close = float(hist_5d['Close'].iloc[-1])
             yesterday_close = float(hist_5d['Close'].iloc[-2])
             vol = int(hist_5d['Volume'].iloc[-1])
@@ -156,7 +156,7 @@ with tabs[0]:
                     global_news = get_latest_news("뉴욕증시 OR 연준 OR 트럼프 OR 빅테크", limit=3)
                     st.write("✅ 2단계 완료!")
                     
-                    st.write("⏳ 3단계: 구글 AI 서버에 전송 중... (REST 통신 강제 적용)")
+                    st.write("⏳ 3단계: 사용 가능한 AI 모델 자동 탐색 및 연결 중...")
                     news_text = "한국 이슈:\n" + "\n".join([n[0] for n in kr_news]) + "\n\n글로벌 이슈:\n" + "\n".join([n[0] for n in global_news])
                     metric_text = f"KOSPI: {k_t:,.2f} ({k_p:+.2f}%), S&P 500: {s_t:,.2f} ({s_p:+.2f}%), 원/달러 환율: {krw_t:,.2f}원"
                     
@@ -180,11 +180,38 @@ with tabs[0]:
                     - 필수 해시태그 포함 (#TY_HTS #증시시황 #매크로분석 #여의도입성)
                     """
                     
-                    # 💡 핵심 해결 코드: Streamlit 클라우드의 무한 로딩 버그를 피하기 위해 transport='rest' 추가 및 올바른 모델명 적용
+                    # 💡 궁극의 해결책: 하드코딩 완전 폐기 및 생존 모델 릴레이 탐색
                     genai.configure(api_key=api_key, transport='rest')
-                    model = genai.GenerativeModel('gemini-1.5-flash')
-                    response = model.generate_content(prompt)
-                    st.write("✅ 3단계 완료!")
+                    
+                    # 현재 API 키로 접근 가능한 모든 모델 긁어오기
+                    available_models = [m.name.replace('models/', '') for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                    
+                    if not available_models:
+                        raise Exception("API 키로 접근 가능한 생성형 AI 모델이 없습니다.")
+                    
+                    # 빠르고 가벼운 flash 모델을 최우선으로 배치, 없으면 나머지 모델들 배치
+                    flash_models = [m for m in available_models if 'flash' in m.lower()]
+                    models_to_try = flash_models + [m for m in available_models if m not in flash_models]
+                    
+                    response = None
+                    used_model = ""
+                    
+                    # 작동하는 모델이 나올 때까지 차례대로 연결 시도
+                    for m_name in models_to_try:
+                        try:
+                            st.write(f"🔄 [{m_name}] 모델 연결 시도 중...")
+                            model = genai.GenerativeModel(m_name)
+                            response = model.generate_content(prompt)
+                            used_model = m_name
+                            break # 성공하면 즉시 루프 탈출
+                        except Exception as try_e:
+                            st.write(f"⚠️ [{m_name}] 연결 실패 (다음 모델로 넘어갑니다)")
+                            continue
+                            
+                    if not response:
+                        raise Exception("모든 AI 모델의 무료 할당량(Quota)이 소진되었거나 접근이 차단되었습니다.")
+                        
+                    st.write(f"✅ 3단계 완료! (최종 사용된 모델: {used_model})")
                     
                     status.update(label="🎉 분석 성공!", state="complete", expanded=False)
                     st.success("✅ 분석 완료! 아래 텍스트를 복사하여 수정 후 인스타그램에 활용하세요.")
