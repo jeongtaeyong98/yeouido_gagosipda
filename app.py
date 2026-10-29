@@ -281,4 +281,4 @@ with tabs[3]:
         for title, link in get_latest_news("AI OR 로봇 OR 피지컬AI OR 반도체 OR 광통신 OR 우주 OR 전력 OR FDA OR 원자재", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col4:
         st.markdown("### 🌎 글로벌 정치·외교")
-        for title, link in get_latest
+        for title, link in get_latest;
