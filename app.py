@@ -10,6 +10,7 @@ import google.generativeai as genai
 
 st.set_page_config(page_title="TY Dashboard", page_icon="📈", layout="wide")
 
+# 💡 사이드바: API 키 입력 및 모닝 메모장 추가
 with st.sidebar:
     st.markdown("### 🔑 시스템 설정")
     api_key = st.text_input("Gemini API Key", type="password", help="발급받은 구글 Gemini API 키를 입력하세요.")
@@ -72,7 +73,6 @@ def get_latest_news(keyword, limit=7, period="1d"):
         search_query = f"{keyword} when:{period}"
         url = f"https://news.google.com/rss/search?q={urllib.parse.quote(search_query)}&hl=ko&gl=KR&ceid=KR:ko"
         req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-        # 💡 무한 로딩 원천 차단: 5초 이상 응답 없으면 바로 끊어버림
         with urllib.request.urlopen(req, timeout=5) as response:
             root = ET.fromstring(response.read())
         return [(item.find('title').text, item.find('link').text) for item in root.findall('.//item')[:limit]]
@@ -175,9 +175,9 @@ with tabs[0]:
                     - 필수 해시태그 포함 (#TY_HTS #증시시황 #매크로분석 #여의도입성)
                     """
                     
-                    # 💡 최신 공식 무료 모델로 완벽 고정
                     genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    # 💡 구글 서버가 요구한 정확한 최신 무료 모델명(gemini-3.8-flash)으로 최종 적용 완료
+                    model = genai.GenerativeModel('gemini-3.8-flash')
                     response = model.generate_content(prompt)
                     
                     st.success("✅ 분석 완료! 아래 텍스트를 복사하여 수정 후 인스타그램에 활용하세요.")
@@ -276,5 +276,3 @@ with tabs[8]:
         st.metric("중국 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
     with col3:
         st.markdown("### 🇹🇼 가권 지수")
-        t, d, p = get_metric("^TWII")
-        st.metric("대만 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
