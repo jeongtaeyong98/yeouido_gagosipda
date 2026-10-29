@@ -12,7 +12,7 @@ st.set_page_config(page_title="TY Dashboard", page_icon="📈", layout="wide")
 
 with st.sidebar:
     st.markdown("### 🔑 시스템 설정")
-    api_key = st.text_input("Gemini API Key", type="password")
+    api_key = st.text_input("Gemini API Key", type="password", help="발급받은 구글 Gemini API 키를 입력하세요.")
     st.markdown("---")
     st.markdown("### 📝 모닝 미팅 메모")
     if 'memo' not in st.session_state:
@@ -155,18 +155,18 @@ with tabs[0]:
         else:
             with st.status("🔍 데이터를 수집하고 분석하는 중입니다...", expanded=True) as status:
                 try:
-                    st.write("⏳ 1단계: 데이터 수집 중...")
+                    st.write("⏳ 1단계: 핵심 지표 데이터 수집 중...")
                     k_t, k_d, k_p = get_metric('^KS11')
                     s_t, s_d, s_p = get_metric('^GSPC')
                     krw_t, krw_d, krw_p = get_metric('KRW=X')
                     st.write("✅ 1단계 완료!")
                     
-                    st.write("⏳ 2단계: 뉴스 크롤링 중...")
+                    st.write("⏳ 2단계: 최신 뉴스 크롤링 중...")
                     kr_news = get_latest_news("금리 OR 환율 OR 코스피 OR 외국인", limit=3)
                     global_news = get_latest_news("뉴욕증시 OR 연준 OR 트럼프 OR 빅테크", limit=3)
                     st.write("✅ 2단계 완료!")
                     
-                    st.write("⏳ 3단계: AI 서버 다이렉트 통신 중...")
+                    st.write("⏳ 3단계: 구글 AI 다이렉트 통신 (404 에러 우회 자동 탐색 중)...")
                     news_text = "한국 이슈:\n" + "\n".join([n[0] for n in kr_news]) + "\n\n글로벌 이슈:\n" + "\n".join([n[0] for n in global_news])
                     metric_text = f"KOSPI: {k_t:,.2f} ({k_p:+.2f}%), S&P 500: {s_t:,.2f} ({s_p:+.2f}%), 원/달러 환율: {krw_t:,.2f}원"
                     
@@ -184,17 +184,37 @@ with tabs[0]:
 2. 인스타그램 피드 텍스트 초안 (친근하게, 질문 유도, 필수 해시태그 #TY_HTS #증시시황 #매크로분석 #여의도입성)
 """
                     
-                    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
-                    headers = {'Content-Type': 'application/json'}
-                    data = {"contents": [{"parts": [{"text": prompt}]}]}
+                    # 💡 여기가 404 에러를 박살내는 자동 우회(Fallback) 리스트
+                    models_to_try = [
+                        'gemini-1.5-flash-latest', 
+                        'gemini-1.5-pro-latest', 
+                        'gemini-1.5-flash', 
+                        'gemini-pro'
+                    ]
                     
-                    req = urllib.request.Request(api_url, data=json.dumps(data).encode('utf-8'), headers=headers, method='POST')
+                    ai_text = None
+                    used_model = ""
                     
-                    with urllib.request.urlopen(req, timeout=15) as response:
-                        result_json = json.loads(response.read().decode('utf-8'))
-                        ai_text = result_json['candidates'][0]['content']['parts'][0]['text']
+                    for m_name in models_to_try:
+                        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{m_name}:generateContent?key={api_key}"
+                        headers = {'Content-Type': 'application/json'}
+                        data = {"contents": [{"parts": [{"text": prompt}]}]}
+                        req = urllib.request.Request(api_url, data=json.dumps(data).encode('utf-8'), headers=headers, method='POST')
                         
-                    st.write("✅ 3단계 완료!")
+                        try:
+                            # 15초 안에 응답 없거나 404 에러가 나면 바로 다음 모델로 넘어감
+                            with urllib.request.urlopen(req, timeout=15) as response:
+                                result_json = json.loads(response.read().decode('utf-8'))
+                                ai_text = result_json['candidates'][0]['content']['parts'][0]['text']
+                                used_model = m_name
+                                break # 성공하는 즉시 루프 탈출
+                        except:
+                            continue # 에러 나면 조용히 다음 모델로 갈아타기
+                            
+                    if not ai_text:
+                        raise Exception("구글 서버에서 접근을 모두 거부했습니다. API 키가 정확한지 확인해주세요.")
+                        
+                    st.write(f"✅ 3단계 완료! (사용된 모델: {used_model})")
                     status.update(label="🎉 분석 성공!", state="complete", expanded=False)
                     st.success("✅ AI 분석 완료!")
                     st.text_area("📋 생성된 피드 초안", ai_text, height=400)
@@ -220,3 +240,86 @@ with tabs[1]:
         st.metric("🇺🇸 S&P 500", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
         t, d, p = get_metric('^TNX')
         st.metric("📊 미국 10년물 금리", f"{t:,.2f}%", f"{d:,.2f}%p ({p:+.2f}%)")
+    with col4:
+        t, d, p = get_metric('^IXIC')
+        st.metric("🇺🇸 NASDAQ", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
+        t, d, p = get_metric('KR10YT=RR') 
+        if t == 0.0: 
+            st.metric("📊 한국 10년물 금리", "API 연동 필요", "-")
+        else: 
+            st.metric("📊 한국 10년물 금리", f"{t:,.2f}%", f"{d:,.2f}%p ({p:+.2f}%)")
+
+with tabs[2]:
+    kr_input = st.text_input("🔍 종목명/코드 입력", "삼성전자")
+    if kr_input:
+        if kr_input in krx_mapping:
+            search_ticker = f"{krx_mapping[kr_input]}.KS"
+        elif kr_input.isdigit() and len(kr_input) == 6:
+            search_ticker = f"{kr_input}.KS"
+        else:
+            search_ticker = KR_STOCKS.get(kr_input, kr_input)
+        display_stock_detail(search_ticker)
+
+with tabs[3]:
+    st.subheader("📰 오늘의 한국 경제 핵심 테마")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown("### 🏦 매크로")
+        for title, link in get_latest_news("금리 OR 환율 OR 수출", limit=7):
+            st.markdown(f"- [{title}]({link})")
+    with col2:
+        st.markdown("### 📈 증시")
+        for title, link in get_latest_news("코스피 OR 코스닥 OR 외국인", limit=7):
+            st.markdown(f"- [{title}]({link})")
+    with col3:
+        st.markdown("### 🚀 산업")
+        for title, link in get_latest_news("AI OR 반도체 OR 전력", limit=7):
+            st.markdown(f"- [{title}]({link})")
+    with col4:
+        st.markdown("### 🌎 외교")
+        for title, link in get_latest_news("트럼프 OR 미국 OR 중국", limit=7):
+            st.markdown(f"- [{title}]({link})")
+
+with tabs[4]:
+    us_input = st.text_input("🔍 영문 티커 입력", "애플")
+    if us_input:
+        search_ticker = US_STOCKS.get(us_input, us_input.upper())
+        display_stock_detail(search_ticker)
+
+with tabs[5]:
+    st.subheader("🌍 글로벌 경제 속보")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("### 🏦 Fed/매크로")
+        for title, link in get_latest_news("연준 OR FOMC OR CPI", limit=7):
+            st.markdown(f"- [{title}]({link})")
+    with col2:
+        st.markdown("### 📉 뉴욕증시")
+        for title, link in get_latest_news("뉴욕증시 OR S&P500 OR 나스닥", limit=7):
+            st.markdown(f"- [{title}]({link})")
+    with col3:
+        st.markdown("### 💻 M7/AI")
+        for title, link in get_latest_news("머스크 OR AI OR 반도체", limit=7):
+            st.markdown(f"- [{title}]({link})")
+
+with tabs[6]:
+    st.subheader("📅 🇰🇷 한국 일정")
+    for title, link in get_latest_news("증시 일정 OR 코스피 실적", limit=10, period="7d"):
+        st.markdown(f"🔹 [{title}]({link})")
+
+with tabs[7]:
+    st.subheader("📅 🇺🇸 미국 일정")
+    for title, link in get_latest_news("미국 증시 일정 OR 실적 OR FOMC", limit=10, period="7d"):
+        st.markdown(f"🔹 [{title}]({link})")
+
+with tabs[8]:
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        t, d, p = get_metric("^N225")
+        st.metric("🇯🇵 일본 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
+    with col2:
+        t, d, p = get_metric("000001.SS")
+        st.metric("🇨🇳 중국 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
+    with col3:
+        t, d, p = get_metric("^TWII")
+        st.metric("🇹🇼 대만 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
