@@ -313,4 +313,4 @@ with tabs[6]:
 
 with tabs[7]:
     st.subheader("📅 🇺🇸 미국 주요 기업 실적 및 경제지표 일정")
-    for title, link in get_latest_news("미국 증시 일정 OR 실적 OR FOMC OR CPI OR PPI OR PCE");
+    for title, link in get_latest_news("미국 증시 일정 OR 실적 OR FOMC OR CPI OR PPI OR PCE"):
