@@ -6,14 +6,13 @@ import urllib.request
 import urllib.parse
 import xml.etree.ElementTree as ET
 import pandas as pd
-import json  # 💡 구글 라이브러리 대신 직접 통신하기 위해 추가
+import json
 
 st.set_page_config(page_title="TY Dashboard", page_icon="📈", layout="wide")
 
-# 💡 사이드바: API 키 입력 및 모닝 메모장 추가
 with st.sidebar:
     st.markdown("### 🔑 시스템 설정")
-    api_key = st.text_input("Gemini API Key", type="password", help="발급받은 구글 Gemini API 키를 입력하세요.")
+    api_key = st.text_input("Gemini API Key", type="password")
     st.markdown("---")
     st.markdown("### 📝 모닝 미팅 메모")
     if 'memo' not in st.session_state:
@@ -42,7 +41,8 @@ def get_krx_mapping():
     try:
         df = fdr.StockListing('KRX')
         return dict(zip(df['Name'], df['Code']))
-    except: return {}
+    except:
+        return {}
 
 krx_mapping = get_krx_mapping()
 
@@ -57,15 +57,18 @@ def get_metric(ticker):
             close_data = df['Close'][-5:]
         else:
             data = yf.download(ticker, period="5d", progress=False)
-            if data.empty: return 0.0, 0.0, 0.0
+            if data.empty: 
+                return 0.0, 0.0, 0.0
             close_data = data['Close'] if 'Close' in data else data
             close_data = close_data.dropna()
 
-        if len(close_data) < 2: return 0.0, 0.0, 0.0
+        if len(close_data) < 2: 
+            return 0.0, 0.0, 0.0
         today = float(close_data.iloc[-1].item() if hasattr(close_data.iloc[-1], 'item') else close_data.iloc[-1])
         yesterday = float(close_data.iloc[-2].item() if hasattr(close_data.iloc[-2], 'item') else close_data.iloc[-2])
         return today, today - yesterday, ((today - yesterday) / yesterday) * 100 if yesterday != 0 else 0
-    except: return 0.0, 0.0, 0.0
+    except:
+        return 0.0, 0.0, 0.0
 
 @st.cache_data(ttl=600, show_spinner=False)
 def get_latest_news(keyword, limit=7, period="1d"):
@@ -76,7 +79,8 @@ def get_latest_news(keyword, limit=7, period="1d"):
         with urllib.request.urlopen(req, timeout=5) as response:
             root = ET.fromstring(response.read())
         return [(item.find('title').text, item.find('link').text) for item in root.findall('.//item')[:limit]]
-    except: return []
+    except:
+        return []
 
 def display_stock_detail(ticker_symbol):
     try:
@@ -84,14 +88,16 @@ def display_stock_detail(ticker_symbol):
         if is_kr:
             fdr_ticker = ticker_symbol.replace('.KS', '').replace('.KQ', '')
             df_recent = fdr.DataReader(fdr_ticker)[-5:]
-            if df_recent.empty or len(df_recent) < 2: return st.error("해당 종목을 찾을 수 없습니다.")
+            if df_recent.empty or len(df_recent) < 2: 
+                return st.error("해당 종목을 찾을 수 없습니다.")
             today_close = float(df_recent['Close'].iloc[-1])
             yesterday_close = float(df_recent['Close'].iloc[-2])
             vol = int(df_recent['Volume'].iloc[-1])
         else:
             stock = yf.Ticker(ticker_symbol)
             hist_5d = stock.history(period="5d").dropna(subset=['Close'])
-            if hist_5d.empty or len(hist_5d) < 2: return st.error("해당 티커(Ticker)를 찾을 수 없습니다.")
+            if hist_5d.empty or len(hist_5d) < 2: 
+                return st.error("해당 티커를 찾을 수 없습니다.")
             today_close = float(hist_5d['Close'].iloc[-1])
             yesterday_close = float(hist_5d['Close'].iloc[-2])
             vol = int(hist_5d['Volume'].iloc[-1])
@@ -101,9 +107,12 @@ def display_stock_detail(ticker_symbol):
         
         col1, col2 = st.columns(2)
         with col1:
-            if is_kr: st.metric("현재가", f"{today_close:,.0f}원", f"{diff:,.0f}원 ({pct:+.2f}%)")
-            else: st.metric("현재가", f"${today_close:,.2f}", f"${diff:,.2f} ({pct:+.2f}%)")
-        with col2: st.metric("당일 거래량", f"{vol:,.0f}주")
+            if is_kr: 
+                st.metric("현재가", f"{today_close:,.0f}원", f"{diff:,.0f}원 ({pct:+.2f}%)")
+            else: 
+                st.metric("현재가", f"${today_close:,.2f}", f"${diff:,.2f} ({pct:+.2f}%)")
+        with col2: 
+            st.metric("당일 거래량", f"{vol:,.0f}주")
             
         st.write("---")
         chart_type = st.radio("차트 종류 선택", ["일봉", "주봉", "월봉", "년봉", "분봉"], horizontal=True, key=f"radio_{ticker_symbol}")
@@ -127,8 +136,10 @@ def display_stock_detail(ticker_symbol):
         if not df_chart.empty:
             st.line_chart(df_chart['Close'])
             st.bar_chart(df_chart['Volume'])
-        else: st.warning("해당 기간의 데이터가 없습니다.")
-    except: st.error("종목 데이터를 불러오는 중 에러가 발생했습니다.")
+        else: 
+            st.warning("해당 기간의 데이터가 없습니다.")
+    except:
+        st.error("종목 데이터를 불러오는 중 에러가 발생했습니다.")
 
 tabs = st.tabs([
     "🤖 AI 매크로 데스크", "1️⃣ 핵심 지표", "2️⃣ 🇰🇷 한국 증시", "3️⃣ 🇰🇷 한국 뉴스", 
@@ -137,50 +148,42 @@ tabs = st.tabs([
 
 with tabs[0]:
     st.subheader("🤖 일일 시황 브리핑 & 인스타그램 피드 초안 생성기")
-    st.markdown("좌측 사이드바에 API 키를 입력한 후 아래 버튼을 누르면, 오늘의 핵심 지표와 뉴스를 종합하여 AI가 분석 리포트와 피드 초안을 작성합니다.")
     
     if st.button("🚀 오늘의 매크로 분석 및 피드 초안 생성", type="primary"):
         if not api_key:
-            st.error("좌측 사이드바에 Gemini API Key를 먼저 입력해주세요.")
+            st.error("좌측 사이드바에 Gemini API Key를 입력해주세요.")
         else:
             with st.status("🔍 데이터를 수집하고 분석하는 중입니다...", expanded=True) as status:
                 try:
-                    st.write("⏳ 1단계: 주가 지수 및 환율 데이터 수집 중...")
+                    st.write("⏳ 1단계: 데이터 수집 중...")
                     k_t, k_d, k_p = get_metric('^KS11')
                     s_t, s_d, s_p = get_metric('^GSPC')
                     krw_t, krw_d, krw_p = get_metric('KRW=X')
                     st.write("✅ 1단계 완료!")
                     
-                    st.write("⏳ 2단계: 최신 뉴스 기사 크롤링 중...")
+                    st.write("⏳ 2단계: 뉴스 크롤링 중...")
                     kr_news = get_latest_news("금리 OR 환율 OR 코스피 OR 외국인", limit=3)
                     global_news = get_latest_news("뉴욕증시 OR 연준 OR 트럼프 OR 빅테크", limit=3)
                     st.write("✅ 2단계 완료!")
                     
-                    st.write("⏳ 3단계: AI 서버에 다이렉트 통신 시도 중 (무한로딩 원천차단)...")
+                    st.write("⏳ 3단계: AI 서버 다이렉트 통신 중...")
                     news_text = "한국 이슈:\n" + "\n".join([n[0] for n in kr_news]) + "\n\n글로벌 이슈:\n" + "\n".join([n[0] for n in global_news])
                     metric_text = f"KOSPI: {k_t:,.2f} ({k_p:+.2f}%), S&P 500: {s_t:,.2f} ({s_p:+.2f}%), 원/달러 환율: {krw_t:,.2f}원"
                     
                     prompt = f"""
-                    당신은 여의도 증권사 리서치센터의 수석 애널리스트이자, 프라이빗 뱅커(PB)입니다.
-                    오늘의 증시 지표와 최신 뉴스 헤드라인을 바탕으로 다음 두 가지를 작성해주세요.
+당신은 여의도 증권사 리서치센터의 수석 애널리스트이자 PB입니다.
+오늘의 증시 지표와 최신 뉴스를 바탕으로 두 가지를 작성해주세요.
 
-                    [오늘의 데이터]
-                    {metric_text}
+[데이터]
+{metric_text}
+[뉴스]
+{news_text}
+
+[양식]
+1. 오늘의 매크로 & 시황 3줄 요약
+2. 인스타그램 피드 텍스트 초안 (친근하게, 질문 유도, 필수 해시태그 #TY_HTS #증시시황 #매크로분석 #여의도입성)
+"""
                     
-                    [주요 뉴스 헤드라인]
-                    {news_text}
-                    
-                    [출력 양식]
-                    **1. 📊 오늘의 매크로 & 시황 3줄 요약**
-                    - (거시경제 흐름과 주식 시장에 미치는 영향을 날카롭고 전문적으로 분석)
-                    
-                    **2. 📱 yeouido_gagosipda 인스타그램 피드 텍스트 초안**
-                    - 톤앤매너: 전문성을 갖춘 예비 현업자의 신뢰감 있는 문체, 그러나 팔로워들이 읽기 쉽고 친근하게.
-                    - 구성: 오늘의 핵심 포인트 짚어주기 -> 개인적인 인사이트 한 줄 -> 팔로워들에게 가벼운 질문 던지며 소통 유도.
-                    - 필수 해시태그 포함 (#TY_HTS #증시시황 #매크로분석 #여의도입성)
-                    """
-                    
-                    # 💡 무한로딩 주범인 라이브러리 뜯어내고 다이렉트(Raw REST) 통신 (타임아웃 15초 제한)
                     api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
                     headers = {'Content-Type': 'application/json'}
                     data = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -192,14 +195,10 @@ with tabs[0]:
                         ai_text = result_json['candidates'][0]['content']['parts'][0]['text']
                         
                     st.write("✅ 3단계 완료!")
-                    
                     status.update(label="🎉 분석 성공!", state="complete", expanded=False)
-                    st.success("✅ AI 분석 완료! 아래 텍스트를 복사하여 인스타그램에 활용하세요.")
-                    st.text_area("📋 생성된 피드 초안 (자유롭게 수정 후 복사하세요)", ai_text, height=400)
+                    st.success("✅ AI 분석 완료!")
+                    st.text_area("📋 생성된 피드 초안", ai_text, height=400)
                         
-                except urllib.error.HTTPError as http_err:
-                    status.update(label="❌ API 에러 발생", state="error", expanded=True)
-                    st.error(f"구글 서버 거절 (API 키가 맞는지 확인해주세요): {http_err.code} {http_err.reason}")
                 except Exception as e:
                     status.update(label="❌ 에러 발생", state="error", expanded=True)
                     st.error(f"상세 에러 내용: {e}")
@@ -220,52 +219,4 @@ with tabs[1]:
         t, d, p = get_metric('^GSPC')
         st.metric("🇺🇸 S&P 500", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
         t, d, p = get_metric('^TNX')
-        st.metric("📊 미국 10년물 금리", f"{t:,.2f}%", f"{d:,.2f}%p ({p:+.2f}%)")
-    with col4:
-        t, d, p = get_metric('^IXIC')
-        st.metric("🇺🇸 NASDAQ", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
-        t, d, p = get_metric('KR10YT=RR') 
-        if t == 0.0: st.metric("📊 한국 10년물 금리", "API 연동 필요", "-")
-        else: st.metric("📊 한국 10년물 금리", f"{t:,.2f}%", f"{d:,.2f}%p ({p:+.2f}%)")
-
-with tabs[2]:
-    kr_input = st.text_input("🔍 종목명 또는 6자리 코드 입력 (예: 에코프로, 카카오뱅크, 323410)", "삼성전자")
-    if kr_input:
-        if kr_input in krx_mapping:
-            search_ticker = f"{krx_mapping[kr_input]}.KS"
-        elif kr_input.isdigit() and len(kr_input) == 6:
-            search_ticker = f"{kr_input}.KS"
-        else:
-            search_ticker = KR_STOCKS.get(kr_input, kr_input)
-        display_stock_detail(search_ticker)
-
-with tabs[3]:
-    st.subheader("📰 오늘의 한국 경제 핵심 테마 (최근 24시간)")
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.markdown("### 🏦 매크로 & 무역")
-        for title, link in get_latest_news("금리 OR 환율 OR 수출 OR 부동산", limit=7, period="1d"):
-            st.markdown(f"- [{title}]({link})")
-    with col2:
-        st.markdown("### 📈 증시 & 수급")
-        for title, link in get_latest_news("코스피 OR 코스닥 OR 외국인", limit=7, period="1d"):
-            st.markdown(f"- [{title}]({link})")
-    with col3:
-        st.markdown("### 🚀 주도 산업")
-        for title, link in get_latest_news("AI OR 로봇 OR 피지컬AI OR 반도체 OR 광통신 OR 우주 OR 전력 OR FDA OR 원자재", limit=7, period="1d"):
-            st.markdown(f"- [{title}]({link})")
-    with col4:
-        st.markdown("### 🌎 글로벌 정치·외교")
-        for title, link in get_latest_news("트럼프 OR 베센트 OR 케빈워시 OR 관세 OR 미국 OR 중국", limit=7, period="1d"):
-            st.markdown(f"- [{title}]({link})")
-
-with tabs[4]:
-    us_input = st.text_input("🔍 종목명(빅테크) 또는 영어 티커 입력 (예: 애플, PLTR, ARM, smci)", "애플")
-    if us_input:
-        search_ticker = US_STOCKS.get(us_input, us_input.upper())
-        display_stock_detail(search_ticker)
-
-with tabs[5]:
-    st.subheader("🌍 글로벌 경제 속보 (국내 주요 경제지 보도 기준)")
-    col1, col2, col3 = st.columns(3)
-    with col1:
+        st.metric("📊 미국 10년물 금리", f"{t:,.2f}%", f"{d:,.2f}%p ({p:+.2
