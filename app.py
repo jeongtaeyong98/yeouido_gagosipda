@@ -6,7 +6,7 @@ import urllib.request
 import urllib.parse
 import xml.etree.ElementTree as ET
 import pandas as pd
-import google.generativeai as genai
+import json  # 💡 구글 라이브러리 대신 직접 통신하기 위해 추가
 
 st.set_page_config(page_title="TY Dashboard", page_icon="📈", layout="wide")
 
@@ -156,7 +156,7 @@ with tabs[0]:
                     global_news = get_latest_news("뉴욕증시 OR 연준 OR 트럼프 OR 빅테크", limit=3)
                     st.write("✅ 2단계 완료!")
                     
-                    st.write("⏳ 3단계: 사용 가능한 AI 모델 자동 탐색 및 연결 중...")
+                    st.write("⏳ 3단계: AI 서버에 다이렉트 통신 시도 중 (무한로딩 원천차단)...")
                     news_text = "한국 이슈:\n" + "\n".join([n[0] for n in kr_news]) + "\n\n글로벌 이슈:\n" + "\n".join([n[0] for n in global_news])
                     metric_text = f"KOSPI: {k_t:,.2f} ({k_p:+.2f}%), S&P 500: {s_t:,.2f} ({s_p:+.2f}%), 원/달러 환율: {krw_t:,.2f}원"
                     
@@ -180,51 +180,26 @@ with tabs[0]:
                     - 필수 해시태그 포함 (#TY_HTS #증시시황 #매크로분석 #여의도입성)
                     """
                     
-                    genai.configure(api_key=api_key, transport='rest')
+                    # 💡 무한로딩 주범인 라이브러리 뜯어내고 다이렉트(Raw REST) 통신 (타임아웃 15초 제한)
+                    api_url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+                    headers = {'Content-Type': 'application/json'}
+                    data = {"contents": [{"parts": [{"text": prompt}]}]}
                     
-                    models_to_try = [
-                        "gemini-1.5-flash",
-                        "gemini-1.5-flash-latest",
-                        "gemini-1.5-pro",
-                        "gemini-pro",
-                        "gemini-flash-latest"
-                    ]
+                    req = urllib.request.Request(api_url, data=json.dumps(data).encode('utf-8'), headers=headers, method='POST')
                     
-                    response = None
-                    used_model = ""
-                    
-                    for m_name in models_to_try:
-                        try:
-                            model = genai.GenerativeModel(m_name)
-                            response = model.generate_content(prompt)
-                            used_model = m_name
-                            break
-                        except:
-                            continue
-                            
-                    if not response:
-                        try:
-                            for m in genai.list_models():
-                                if 'generateContent' in m.supported_generation_methods:
-                                    try:
-                                        m_name = m.name.replace('models/', '')
-                                        model = genai.GenerativeModel(m_name)
-                                        response = model.generate_content(prompt)
-                                        used_model = m_name
-                                        break
-                                    except:
-                                        continue
-                        except:
-                            pass
-                            
-                    if response:
-                        st.write("✅ 3단계 완료!")
-                        status.update(label="🎉 분석 성공!", state="complete", expanded=False)
-                        st.success(f"✅ AI 분석 완료! (연결 성공 모델: {used_model})")
-                        st.text_area("📋 생성된 피드 초안 (자유롭게 수정 후 복사하세요)", response.text, height=400)
-                    else:
-                        raise Exception("현재 구글 무료 API 한도가 모두 소진되었거나 서버 점검 중입니다. 잠시 후 다시 시도해주세요.")
+                    with urllib.request.urlopen(req, timeout=15) as response:
+                        result_json = json.loads(response.read().decode('utf-8'))
+                        ai_text = result_json['candidates'][0]['content']['parts'][0]['text']
                         
+                    st.write("✅ 3단계 완료!")
+                    
+                    status.update(label="🎉 분석 성공!", state="complete", expanded=False)
+                    st.success("✅ AI 분석 완료! 아래 텍스트를 복사하여 인스타그램에 활용하세요.")
+                    st.text_area("📋 생성된 피드 초안 (자유롭게 수정 후 복사하세요)", ai_text, height=400)
+                        
+                except urllib.error.HTTPError as http_err:
+                    status.update(label="❌ API 에러 발생", state="error", expanded=True)
+                    st.error(f"구글 서버 거절 (API 키가 맞는지 확인해주세요): {http_err.code} {http_err.reason}")
                 except Exception as e:
                     status.update(label="❌ 에러 발생", state="error", expanded=True)
                     st.error(f"상세 에러 내용: {e}")
@@ -294,39 +269,3 @@ with tabs[5]:
     st.subheader("🌍 글로벌 경제 속보 (국내 주요 경제지 보도 기준)")
     col1, col2, col3 = st.columns(3)
     with col1:
-        st.markdown("### 🏦 Fed & 경제 지표")
-        for title, link in get_latest_news("연준 OR FOMC OR CPI OR PPI OR PCE OR 워시 OR 트럼프 OR 미국 OR 중국", limit=7, period="1d"):
-            st.markdown(f"- [{title}]({link})")
-    with col2:
-        st.markdown("### 📉 뉴욕 증시 & 국채")
-        for title, link in get_latest_news("뉴욕증시 OR S&P500 OR 나스닥 OR 미 국채금리 OR M7 OR 빅테크", limit=7, period="1d"):
-            st.markdown(f"- [{title}]({link})")
-    with col3:
-        st.markdown("### 💻 M7 & AI 반도체")
-        for title, link in get_latest_news("머스크 OR 젠슨황 OR Physical AI OR 로봇 OR AI OR 반도체 OR 광통신 OR 데이터센터 OR 전력", limit=7, period="1d"):
-            st.markdown(f"- [{title}]({link})")
-
-with tabs[6]:
-    st.subheader("📅 🇰🇷 한국 주요 기업 실적 및 경제지표 일정")
-    for title, link in get_latest_news("증시 일정 OR 코스피 실적 발표 OR 금통위", limit=10, period="7d"):
-        st.markdown(f"🔹 [{title}]({link})")
-
-with tabs[7]:
-    st.subheader("📅 🇺🇸 미국 주요 기업 실적 및 경제지표 일정")
-    for title, link in get_latest_news("미국 증시 일정 OR 실적 OR FOMC OR CPI OR PPI OR PCE", limit=10, period="7d"):
-        st.markdown(f"🔹 [{title}]({link})")
-
-with tabs[8]:
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("### 🇯🇵 니케이 225")
-        t, d, p = get_metric("^N225")
-        st.metric("일본 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
-    with col2:
-        st.markdown("### 🇨🇳 상해 종합")
-        t, d, p = get_metric("000001.SS")
-        st.metric("중국 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
-    with col3:
-        st.markdown("### 🇹🇼 가권 지수")
-        t, d, p = get_metric("^TWII")
-        st.metric("대만 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
