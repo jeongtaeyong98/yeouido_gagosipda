@@ -7,6 +7,7 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 import pandas as pd
 import json
+import requests  # 추가: 안정적인 API REST 통신을 위한 라이브러리
 
 st.set_page_config(page_title="TY Dashboard", page_icon="📈", layout="wide")
 
@@ -81,6 +82,22 @@ def get_latest_news(keyword, limit=7, period="1d"):
         return [(item.find('title').text, item.find('link').text) for item in root.findall('.//item')[:limit]]
     except:
         return []
+
+# 추가: 구글 Gemini API 호출 전용 헬퍼 함수
+def generate_ai_desk_summary(prompt: str, key: str) -> str:
+    """Gemini 3.8 Flash 모델을 requests로 호출하여 404 및 무한 로딩을 방지합니다."""
+    model_name = "gemini-3.8-flash"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+    headers = {"Content-Type": "application/json"}
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+    
+    response = requests.post(url, headers=headers, json=payload, timeout=15)
+    
+    if response.status_code != 200:
+        raise Exception(f"API 통신 에러 ({response.status_code}): {response.text}")
+        
+    result = response.json()
+    return result["candidates"][0]["content"]["parts"][0]["text"]
 
 def display_stock_detail(ticker_symbol):
     try:
@@ -166,7 +183,7 @@ with tabs[0]:
                     global_news = get_latest_news("뉴욕증시 OR 연준 OR 트럼프 OR 빅테크", limit=3)
                     st.write("✅ 2단계 완료!")
                     
-                    st.write("⏳ 3단계: 구글 AI 다이렉트 통신 (404 에러 우회 자동 탐색 중)...")
+                    st.write("⏳ 3단계: 구글 AI 다이렉트 통신 (최신 모델 호출 중)...")
                     news_text = "한국 이슈:\n" + "\n".join([n[0] for n in kr_news]) + "\n\n글로벌 이슈:\n" + "\n".join([n[0] for n in global_news])
                     metric_text = f"KOSPI: {k_t:,.2f} ({k_p:+.2f}%), S&P 500: {s_t:,.2f} ({s_p:+.2f}%), 원/달러 환율: {krw_t:,.2f}원"
                     
@@ -184,42 +201,17 @@ with tabs[0]:
 2. 인스타그램 피드 텍스트 초안 (친근하게, 질문 유도, 필수 해시태그 #TY_HTS #증시시황 #매크로분석 #여의도입성)
 """
                     
-                    # 💡 여기가 404 에러를 박살내는 자동 우회(Fallback) 리스트
-                    models_to_try = [
-                        'gemini-1.5-flash-latest', 
-                        'gemini-1.5-pro-latest', 
-                        'gemini-1.5-flash', 
-                        'gemini-pro'
-                    ]
+                    # 변경: urllib fallback 루프 제거 -> requests 단일 호출 (에러 시 try-except로 빠짐)
+                    ai_text = generate_ai_desk_summary(prompt, api_key)
                     
-                    ai_text = None
-                    used_model = ""
-                    
-                    for m_name in models_to_try:
-                        api_url = f"https://generativelanguage.googleapis.com/v1beta/models/{m_name}:generateContent?key={api_key}"
-                        headers = {'Content-Type': 'application/json'}
-                        data = {"contents": [{"parts": [{"text": prompt}]}]}
-                        req = urllib.request.Request(api_url, data=json.dumps(data).encode('utf-8'), headers=headers, method='POST')
-                        
-                        try:
-                            # 15초 안에 응답 없거나 404 에러가 나면 바로 다음 모델로 넘어감
-                            with urllib.request.urlopen(req, timeout=15) as response:
-                                result_json = json.loads(response.read().decode('utf-8'))
-                                ai_text = result_json['candidates'][0]['content']['parts'][0]['text']
-                                used_model = m_name
-                                break # 성공하는 즉시 루프 탈출
-                        except:
-                            continue # 에러 나면 조용히 다음 모델로 갈아타기
-                            
-                    if not ai_text:
-                        raise Exception("구글 서버에서 접근을 모두 거부했습니다. API 키가 정확한지 확인해주세요.")
-                        
-                    st.write(f"✅ 3단계 완료! (사용된 모델: {used_model})")
+                    st.write("✅ 3단계 완료! (사용된 모델: gemini-3.8-flash)")
                     status.update(label="🎉 분석 성공!", state="complete", expanded=False)
+                    
                     st.success("✅ AI 분석 완료!")
                     st.text_area("📋 생성된 피드 초안", ai_text, height=400)
                         
                 except Exception as e:
+                    # HTTP 통신 에러 발생 시 여기서 잡아내어 화면에 출력
                     status.update(label="❌ 에러 발생", state="error", expanded=True)
                     st.error(f"상세 에러 내용: {e}")
 
