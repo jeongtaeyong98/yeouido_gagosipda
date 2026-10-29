@@ -144,7 +144,7 @@ with tabs[0]:
         if not api_key:
             st.error("좌측 사이드바에 Gemini API Key를 먼저 입력해주세요. (입력 후 Enter 필수)")
         else:
-            with st.spinner("최신 지수와 뉴스를 읽고 분석 중입니다. (약 10초 소요)..."):
+            with st.spinner("가장 안정적인 AI 모델을 스캔하고 뉴스를 분석 중입니다. (약 10초 소요)..."):
                 try:
                     k_t, k_d, k_p = get_metric('^KS11')
                     s_t, s_d, s_p = get_metric('^GSPC')
@@ -176,12 +176,28 @@ with tabs[0]:
                     - 필수 해시태그 포함 (#TY_HTS #증시시황 #매크로분석 #여의도입성)
                     """
                     
+                    # 💡 구글 AI 완벽 연동: 내 API 키로 접속 가능한 '무료(flash)' 모델을 실시간으로 추적해서 자동 연결
                     genai.configure(api_key=api_key)
-                    # 💡 자동 탐색 코드 삭제 및 가장 안정적인 무료 모델 'gemini-pro'로 명시적 강제 고정!
-                    model = genai.GenerativeModel('gemini-pro')
+                    
+                    valid_models = []
+                    for m in genai.list_models():
+                        if 'generateContent' in m.supported_generation_methods:
+                            valid_models.append(m.name.replace('models/', ''))
+                            
+                    # Pro는 쿼터 에러가 날 수 있으므로 빠르고 무료인 Flash 계열을 1순위로 탐색
+                    flash_models = [m for m in valid_models if 'flash' in m.lower()]
+                    
+                    if flash_models:
+                        target_model = flash_models[0]
+                    elif valid_models:
+                        target_model = valid_models[0]
+                    else:
+                        raise ValueError("현재 사용 가능한 구글 AI 모델이 없습니다.")
+                        
+                    model = genai.GenerativeModel(target_model)
                     response = model.generate_content(prompt)
                     
-                    st.success("✅ 분석 완료! 아래 텍스트를 복사하여 수정 후 인스타그램에 활용하세요.")
+                    st.success(f"✅ 분석 완료! (사용된 AI 모델: {target_model}) 아래 텍스트를 복사하여 수정 후 인스타그램에 활용하세요.")
                     st.text_area("📋 생성된 피드 초안 (자유롭게 수정 후 복사하세요)", response.text, height=400)
                     
                 except Exception as e:
@@ -251,31 +267,3 @@ with tabs[5]:
         st.markdown("### 🏦 Fed & 경제 지표")
         for title, link in get_latest_news("연준 OR FOMC OR CPI OR PPI OR PCE OR 워시 OR 트럼프 OR 미국 OR 중국", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col2:
-        st.markdown("### 📉 뉴욕 증시 & 국채")
-        for title, link in get_latest_news("뉴욕증시 OR S&P500 OR 나스닥 OR 미 국채금리 OR M7 OR 빅테크", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
-    with col3:
-        st.markdown("### 💻 M7 & AI 반도체")
-        for title, link in get_latest_news("머스크 OR 젠슨황 OR Physical AI OR 로봇 OR AI OR 반도체 OR 광통신 OR 데이터센터 OR 전력", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
-
-with tabs[6]:
-    st.subheader("📅 🇰🇷 한국 주요 기업 실적 및 경제지표 일정")
-    for title, link in get_latest_news("증시 일정 OR 코스피 실적 발표 OR 금통위", limit=10, period="7d"): st.markdown(f"🔹 [{title}]({link})")
-
-with tabs[7]:
-    st.subheader("📅 🇺🇸 미국 주요 기업 실적 및 경제지표 일정")
-    for title, link in get_latest_news("미국 증시 일정 OR 실적 OR FOMC OR CPI OR PPI OR PCE", limit=10, period="7d"): st.markdown(f"🔹 [{title}]({link})")
-
-with tabs[8]:
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.markdown("### 🇯🇵 니케이 225")
-        t, d, p = get_metric("^N225")
-        st.metric("일본 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
-    with col2:
-        st.markdown("### 🇨🇳 상해 종합")
-        t, d, p = get_metric("000001.SS")
-        st.metric("중국 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
-    with col3:
-        st.markdown("### 🇹🇼 가권 지수")
-        t, d, p = get_metric("^TWII")
-        st.metric("대만 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
