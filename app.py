@@ -6,8 +6,22 @@ import urllib.request
 import urllib.parse
 import xml.etree.ElementTree as ET
 import pandas as pd
+import google.generativeai as genai
 
 st.set_page_config(page_title="TY Dashboard", page_icon="📈", layout="wide")
+
+# 💡 사이드바: API 키 입력 및 모닝 메모장 추가
+with st.sidebar:
+    st.markdown("### 🔑 시스템 설정")
+    api_key = st.text_input("Gemini API Key", type="password", help="발급받은 구글 Gemini API 키를 입력하세요.")
+    st.markdown("---")
+    st.markdown("### 📝 모닝 미팅 메모")
+    if 'memo' not in st.session_state:
+        st.session_state.memo = ""
+    st.session_state.memo = st.text_area("오늘의 핵심 투자 아이디어", st.session_state.memo, height=300)
+    if st.button("메모 저장"):
+        st.success("메모가 임시 저장되었습니다.")
+
 st.title("📈 TY_HTS - 매크로 & 증시 시황판")
 st.markdown("일일 대시보드")
 st.write("---")
@@ -23,7 +37,7 @@ US_STOCKS = {
     "구글": "GOOGL", "Google": "GOOGL", "아마존": "AMZN", "Amazon": "AMZN", "메타": "META", "Meta": "META"
 }
 
-# 💡 KRX(한국거래소) 전 종목 이름-코드 매핑 (하루 1번만 캐시로 불러와서 속도 저하 없음)
+# 💡 KRX(한국거래소) 전 종목 이름-코드 매핑
 @st.cache_data(ttl=86400, show_spinner=False)
 def get_krx_mapping():
     try:
@@ -117,12 +131,65 @@ def display_stock_detail(ticker_symbol):
         else: st.warning("해당 기간의 데이터가 없습니다.")
     except: st.error("종목 데이터를 불러오는 중 에러가 발생했습니다.")
 
+# 💡 AI 데스크를 0번 탭으로 추가하고 나머지 탭 번호 순연
 tabs = st.tabs([
-    "1️⃣ 핵심 지표", "2️⃣ 🇰🇷 한국 증시", "3️⃣ 🇰🇷 한국 뉴스", "4️⃣ 🇺🇸 미국 증시", 
-    "5️⃣ 🌍 글로벌 뉴스", "6️⃣ 📅 🇰🇷 한국 일정", "7️⃣ 📅 🇺🇸 미국 일정", "8️⃣ 🌏 아시아 증시"
+    "🤖 AI 매크로 데스크", "1️⃣ 핵심 지표", "2️⃣ 🇰🇷 한국 증시", "3️⃣ 🇰🇷 한국 뉴스", 
+    "4️⃣ 🇺🇸 미국 증시", "5️⃣ 🌍 글로벌 뉴스", "6️⃣ 📅 🇰🇷 한국 일정", "7️⃣ 📅 🇺🇸 미국 일정", "8️⃣ 🌏 아시아 증시"
 ])
 
+# 💡 0번 탭: AI 시황 브리핑 및 인스타 피드 초안 생성
 with tabs[0]:
+    st.subheader("🤖 일일 시황 브리핑 & 인스타그램 피드 초안 생성기")
+    st.markdown("좌측 사이드바에 API 키를 입력한 후 아래 버튼을 누르면, 오늘의 핵심 지표와 뉴스를 종합하여 AI가 분석 리포트와 피드 초안을 작성합니다.")
+    
+    if st.button("🚀 오늘의 매크로 분석 및 피드 초안 생성", type="primary"):
+        if not api_key:
+            st.error("좌측 사이드바에 Gemini API Key를 먼저 입력해주세요. (입력 후 Enter 필수)")
+        else:
+            with st.spinner("최신 지수와 뉴스를 읽고 분석 중입니다. (약 10초 소요)..."):
+                try:
+                    # AI에게 제공할 핵심 데이터 수집
+                    k_t, k_d, k_p = get_metric('^KS11')
+                    s_t, s_d, s_p = get_metric('^GSPC')
+                    krw_t, krw_d, krw_p = get_metric('KRW=X')
+                    
+                    kr_news = get_latest_news("금리 OR 환율 OR 코스피 OR 외국인", limit=3)
+                    global_news = get_latest_news("뉴욕증시 OR 연준 OR 트럼프 OR 빅테크", limit=3)
+                    
+                    news_text = "한국 이슈:\n" + "\n".join([n[0] for n in kr_news]) + "\n\n글로벌 이슈:\n" + "\n".join([n[0] for n in global_news])
+                    metric_text = f"KOSPI: {k_t:,.2f} ({k_p:+.2f}%), S&P 500: {s_t:,.2f} ({s_p:+.2f}%), 원/달러 환율: {krw_t:,.2f}원"
+                    
+                    prompt = f"""
+                    당신은 여의도 증권사 리서치센터의 수석 애널리스트이자, 프라이빗 뱅커(PB)입니다.
+                    오늘의 증시 지표와 최신 뉴스 헤드라인을 바탕으로 다음 두 가지를 작성해주세요.
+
+                    [오늘의 데이터]
+                    {metric_text}
+                    
+                    [주요 뉴스 헤드라인]
+                    {news_text}
+                    
+                    [출력 양식]
+                    **1. 📊 오늘의 매크로 & 시황 3줄 요약**
+                    - (거시경제 흐름과 주식 시장에 미치는 영향을 날카롭고 전문적으로 분석)
+                    
+                    **2. 📱 yeouido_gagosipda 인스타그램 피드 텍스트 초안**
+                    - 톤앤매너: 전문성을 갖춘 예비 현업자의 신뢰감 있는 문체, 그러나 팔로워들이 읽기 쉽고 친근하게.
+                    - 구성: 오늘의 핵심 포인트 짚어주기 -> 개인적인 인사이트 한 줄 -> 팔로워들에게 가벼운 질문 던지며 소통 유도.
+                    - 필수 해시태그 포함 (#TY_HTS #증시시황 #매크로분석 #여의도입성)
+                    """
+                    
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    response = model.generate_content(prompt)
+                    
+                    st.success("✅ 분석 완료! 아래 텍스트를 복사하여 수정 후 인스타그램에 활용하세요.")
+                    st.text_area("📋 생성된 피드 초안 (자유롭게 수정 후 복사하세요)", response.text, height=400)
+                    
+                except Exception as e:
+                    st.error(f"AI 분석 중 오류가 발생했습니다. API 키가 정확한지 확인해주세요: {e}")
+
+with tabs[1]:
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         t, d, p = get_metric('^KS11')
@@ -146,8 +213,7 @@ with tabs[0]:
         if t == 0.0: st.metric("📊 한국 10년물 금리", "API 연동 필요", "-")
         else: st.metric("📊 한국 10년물 금리", f"{t:,.2f}%", f"{d:,.2f}%p ({p:+.2f}%)")
 
-# 💡 2번 탭: 한국 증시 전 종목 검색 오픈
-with tabs[1]:
+with tabs[2]:
     kr_input = st.text_input("🔍 종목명 또는 6자리 코드 입력 (예: 에코프로, 카카오뱅크, 323410)", "삼성전자")
     if kr_input:
         if kr_input in krx_mapping:
@@ -158,7 +224,7 @@ with tabs[1]:
             search_ticker = KR_STOCKS.get(kr_input, kr_input)
         display_stock_detail(search_ticker)
 
-with tabs[2]:
+with tabs[3]:
     st.subheader("📰 오늘의 한국 경제 핵심 테마 (최근 24시간)")
     col1, col2, col3, col4 = st.columns(4)
     with col1:
@@ -174,15 +240,13 @@ with tabs[2]:
         st.markdown("### 🌎 글로벌 정치·외교")
         for title, link in get_latest_news("트럼프 OR 베센트 OR 케빈워시 OR 관세 OR 미국 OR 중국", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
 
-# 💡 4번 탭: 미국 증시 티커 검색 지원 및 소문자 자동 변환
-with tabs[3]:
+with tabs[4]:
     us_input = st.text_input("🔍 종목명(빅테크) 또는 영어 티커 입력 (예: 애플, PLTR, ARM, smci)", "애플")
     if us_input:
-        # 영어 소문자를 입력해도 대문자로 자동 변환하여 인식
         search_ticker = US_STOCKS.get(us_input, us_input.upper())
         display_stock_detail(search_ticker)
 
-with tabs[4]:
+with tabs[5]:
     st.subheader("🌍 글로벌 경제 속보 (국내 주요 경제지 보도 기준)")
     col1, col2, col3 = st.columns(3)
     with col1:
@@ -195,15 +259,15 @@ with tabs[4]:
         st.markdown("### 💻 M7 & AI 반도체")
         for title, link in get_latest_news("머스크 OR 젠슨황 OR Physical AI OR 로봇 OR AI OR 반도체 OR 광통신 OR 데이터센터 OR 전력", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
 
-with tabs[5]:
+with tabs[6]:
     st.subheader("📅 🇰🇷 한국 주요 기업 실적 및 경제지표 일정")
     for title, link in get_latest_news("증시 일정 OR 코스피 실적 발표 OR 금통위", limit=10, period="7d"): st.markdown(f"🔹 [{title}]({link})")
 
-with tabs[6]:
+with tabs[7]:
     st.subheader("📅 🇺🇸 미국 주요 기업 실적 및 경제지표 일정")
     for title, link in get_latest_news("미국 증시 일정 OR 실적 OR FOMC OR CPI OR PPI OR PCE", limit=10, period="7d"): st.markdown(f"🔹 [{title}]({link})")
 
-with tabs[7]:
+with tabs[8]:
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown("### 🇯🇵 니케이 225")
