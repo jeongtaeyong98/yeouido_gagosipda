@@ -267,3 +267,31 @@ with tabs[5]:
         st.markdown("### 🏦 Fed & 경제 지표")
         for title, link in get_latest_news("연준 OR FOMC OR CPI OR PPI OR PCE OR 워시 OR 트럼프 OR 미국 OR 중국", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
     with col2:
+        st.markdown("### 📉 뉴욕 증시 & 국채")
+        for title, link in get_latest_news("뉴욕증시 OR S&P500 OR 나스닥 OR 미 국채금리 OR M7 OR 빅테크", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+    with col3:
+        st.markdown("### 💻 M7 & AI 반도체")
+        for title, link in get_latest_news("머스크 OR 젠슨황 OR Physical AI OR 로봇 OR AI OR 반도체 OR 광통신 OR 데이터센터 OR 전력", limit=7, period="1d"): st.markdown(f"- [{title}]({link})")
+
+with tabs[6]:
+    st.subheader("📅 🇰🇷 한국 주요 기업 실적 및 경제지표 일정")
+    for title, link in get_latest_news("증시 일정 OR 코스피 실적 발표 OR 금통위", limit=10, period="7d"): st.markdown(f"🔹 [{title}]({link})")
+
+with tabs[7]:
+    st.subheader("📅 🇺🇸 미국 주요 기업 실적 및 경제지표 일정")
+    for title, link in get_latest_news("미국 증시 일정 OR 실적 OR FOMC OR CPI OR PPI OR PCE", limit=10, period="7d"): st.markdown(f"🔹 [{title}]({link})")
+
+with tabs[8]:
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("### 🇯🇵 니케이 225")
+        t, d, p = get_metric("^N225")
+        st.metric("일본 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
+    with col2:
+        st.markdown("### 🇨🇳 상해 종합")
+        t, d, p = get_metric("000001.SS")
+        st.metric("중국 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
+    with col3:
+        st.markdown("### 🇹🇼 가권 지수")
+        t, d, p = get_metric("^TWII")
+        st.metric("대만 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
