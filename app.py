@@ -131,13 +131,11 @@ def display_stock_detail(ticker_symbol):
         else: st.warning("해당 기간의 데이터가 없습니다.")
     except: st.error("종목 데이터를 불러오는 중 에러가 발생했습니다.")
 
-# 💡 AI 데스크를 0번 탭으로 추가하고 나머지 탭 번호 순연
 tabs = st.tabs([
     "🤖 AI 매크로 데스크", "1️⃣ 핵심 지표", "2️⃣ 🇰🇷 한국 증시", "3️⃣ 🇰🇷 한국 뉴스", 
     "4️⃣ 🇺🇸 미국 증시", "5️⃣ 🌍 글로벌 뉴스", "6️⃣ 📅 🇰🇷 한국 일정", "7️⃣ 📅 🇺🇸 미국 일정", "8️⃣ 🌏 아시아 증시"
 ])
 
-# 💡 0번 탭: AI 시황 브리핑 및 인스타 피드 초안 생성
 with tabs[0]:
     st.subheader("🤖 일일 시황 브리핑 & 인스타그램 피드 초안 생성기")
     st.markdown("좌측 사이드바에 API 키를 입력한 후 아래 버튼을 누르면, 오늘의 핵심 지표와 뉴스를 종합하여 AI가 분석 리포트와 피드 초안을 작성합니다.")
@@ -148,7 +146,6 @@ with tabs[0]:
         else:
             with st.spinner("최신 지수와 뉴스를 읽고 분석 중입니다. (약 10초 소요)..."):
                 try:
-                    # AI에게 제공할 핵심 데이터 수집
                     k_t, k_d, k_p = get_metric('^KS11')
                     s_t, s_d, s_p = get_metric('^GSPC')
                     krw_t, krw_d, krw_p = get_metric('KRW=X')
@@ -180,14 +177,15 @@ with tabs[0]:
                     """
                     
                     genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    # 💡 오류를 뿜어내던 'gemini-1.5-flash' 대신 가장 안정적인 'gemini-pro'로 변경 완료!
+                    model = genai.GenerativeModel('gemini-pro')
                     response = model.generate_content(prompt)
                     
                     st.success("✅ 분석 완료! 아래 텍스트를 복사하여 수정 후 인스타그램에 활용하세요.")
                     st.text_area("📋 생성된 피드 초안 (자유롭게 수정 후 복사하세요)", response.text, height=400)
                     
                 except Exception as e:
-                    st.error(f"AI 분석 중 오류가 발생했습니다. API 키가 정확한지 확인해주세요: {e}")
+                    st.error(f"AI 분석 중 오류가 발생했습니다: {e}")
 
 with tabs[1]:
     col1, col2, col3, col4 = st.columns(4)
