@@ -177,19 +177,8 @@ with tabs[0]:
                     """
                     
                     genai.configure(api_key=api_key)
-                    
-                    # 💡 404 에러 원천 차단: 구글 API에 현재 사용 가능한 모델 목록을 요청해서 동적으로 매핑
-                    target_model = "gemini-1.5-flash" # 기본값 설정
-                    for m in genai.list_models():
-                        if 'generateContent' in m.supported_generation_methods:
-                            name = m.name.replace("models/", "")
-                            if "1.5-flash" in name:
-                                target_model = name
-                                break
-                            elif "gemini-pro" in name or "1.5-pro" in name:
-                                target_model = name
-                                
-                    model = genai.GenerativeModel(target_model)
+                    # 💡 자동 탐색 코드 삭제 및 가장 안정적인 무료 모델 'gemini-pro'로 명시적 강제 고정!
+                    model = genai.GenerativeModel('gemini-pro')
                     response = model.generate_content(prompt)
                     
                     st.success("✅ 분석 완료! 아래 텍스트를 복사하여 수정 후 인스타그램에 활용하세요.")
