@@ -84,14 +84,14 @@ def display_stock_detail(ticker_symbol):
         if is_kr:
             fdr_ticker = ticker_symbol.replace('.KS', '').replace('.KQ', '')
             df_recent = fdr.DataReader(fdr_ticker)[-5:]
-            if df_recent.empty or len(df_recent) < 2: return st.error("해당 종목을 찾을 수 없습니다.")
+            if df_recent.empty or len(df_recent) < 2: return st.error("해당 종목을 찾을 수 없습니다. 이름이나 코드를 확인해주세요.")
             today_close = float(df_recent['Close'].iloc[-1])
             yesterday_close = float(df_recent['Close'].iloc[-2])
             vol = int(df_recent['Volume'].iloc[-1])
         else:
             stock = yf.Ticker(ticker_symbol)
             hist_5d = stock.history(period="5d").dropna(subset=['Close'])
-            if hist_5d.empty or len(hist_5d) < 2: return st.error("해당 티커(Ticker)를 찾을 수 없습니다.")
+            if hist_5d.empty or len(hist_5d) < 2: return st.error("해당 티커(Ticker)를 찾을 수 없습니다. 영문 철자를 확인해주세요.")
             today_close = float(hist_5d['Close'].iloc[-1])
             yesterday_close = float(hist_5d['Close'].iloc[-2])
             vol = int(hist_5d['Volume'].iloc[-1])
@@ -135,7 +135,6 @@ tabs = st.tabs([
     "4️⃣ 🇺🇸 미국 증시", "5️⃣ 🌍 글로벌 뉴스", "6️⃣ 📅 🇰🇷 한국 일정", "7️⃣ 📅 🇺🇸 미국 일정", "8️⃣ 🌏 아시아 증시"
 ])
 
-# 💡 이 부분이 핵심! 멈추는 구간을 실시간으로 추적하는 로직
 with tabs[0]:
     st.subheader("🤖 일일 시황 브리핑 & 인스타그램 피드 초안 생성기")
     st.markdown("좌측 사이드바에 API 키를 입력한 후 아래 버튼을 누르면, 오늘의 핵심 지표와 뉴스를 종합하여 AI가 분석 리포트와 피드 초안을 작성합니다.")
@@ -157,7 +156,7 @@ with tabs[0]:
                     global_news = get_latest_news("뉴욕증시 OR 연준 OR 트럼프 OR 빅테크", limit=3)
                     st.write("✅ 2단계 완료!")
                     
-                    st.write("⏳ 3단계: 구글 AI 서버에 전송 중... (여기서 멈추면 API 문제!)")
+                    st.write("⏳ 3단계: 구글 AI 서버에 전송 중... (REST 통신 강제 적용)")
                     news_text = "한국 이슈:\n" + "\n".join([n[0] for n in kr_news]) + "\n\n글로벌 이슈:\n" + "\n".join([n[0] for n in global_news])
                     metric_text = f"KOSPI: {k_t:,.2f} ({k_p:+.2f}%), S&P 500: {s_t:,.2f} ({s_p:+.2f}%), 원/달러 환율: {krw_t:,.2f}원"
                     
@@ -181,8 +180,9 @@ with tabs[0]:
                     - 필수 해시태그 포함 (#TY_HTS #증시시황 #매크로분석 #여의도입성)
                     """
                     
-                    genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel('gemini-3.8-flash')
+                    # 💡 핵심 해결 코드: Streamlit 클라우드의 무한 로딩 버그를 피하기 위해 transport='rest' 추가 및 올바른 모델명 적용
+                    genai.configure(api_key=api_key, transport='rest')
+                    model = genai.GenerativeModel('gemini-1.5-flash')
                     response = model.generate_content(prompt)
                     st.write("✅ 3단계 완료!")
                     
