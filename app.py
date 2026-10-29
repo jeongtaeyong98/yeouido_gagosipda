@@ -84,14 +84,14 @@ def display_stock_detail(ticker_symbol):
         if is_kr:
             fdr_ticker = ticker_symbol.replace('.KS', '').replace('.KQ', '')
             df_recent = fdr.DataReader(fdr_ticker)[-5:]
-            if df_recent.empty or len(df_recent) < 2: return st.error("해당 종목을 찾을 수 없습니다. 이름이나 코드를 확인해주세요.")
+            if df_recent.empty or len(df_recent) < 2: return st.error("해당 종목을 찾을 수 없습니다.")
             today_close = float(df_recent['Close'].iloc[-1])
             yesterday_close = float(df_recent['Close'].iloc[-2])
             vol = int(df_recent['Volume'].iloc[-1])
         else:
             stock = yf.Ticker(ticker_symbol)
             hist_5d = stock.history(period="5d").dropna(subset=['Close'])
-            if hist_5d.empty or len(hist_5d) < 2: return st.error("해당 티커(Ticker)를 찾을 수 없습니다. 영문 철자를 확인해주세요.")
+            if hist_5d.empty or len(hist_5d) < 2: return st.error("해당 티커(Ticker)를 찾을 수 없습니다.")
             today_close = float(hist_5d['Close'].iloc[-1])
             yesterday_close = float(hist_5d['Close'].iloc[-2])
             vol = int(hist_5d['Volume'].iloc[-1])
@@ -135,23 +135,29 @@ tabs = st.tabs([
     "4️⃣ 🇺🇸 미국 증시", "5️⃣ 🌍 글로벌 뉴스", "6️⃣ 📅 🇰🇷 한국 일정", "7️⃣ 📅 🇺🇸 미국 일정", "8️⃣ 🌏 아시아 증시"
 ])
 
+# 💡 이 부분이 핵심! 멈추는 구간을 실시간으로 추적하는 로직
 with tabs[0]:
     st.subheader("🤖 일일 시황 브리핑 & 인스타그램 피드 초안 생성기")
     st.markdown("좌측 사이드바에 API 키를 입력한 후 아래 버튼을 누르면, 오늘의 핵심 지표와 뉴스를 종합하여 AI가 분석 리포트와 피드 초안을 작성합니다.")
     
     if st.button("🚀 오늘의 매크로 분석 및 피드 초안 생성", type="primary"):
         if not api_key:
-            st.error("좌측 사이드바에 Gemini API Key를 먼저 입력해주세요. (입력 후 Enter 필수)")
+            st.error("좌측 사이드바에 Gemini API Key를 먼저 입력해주세요.")
         else:
-            with st.spinner("최신 지수와 뉴스를 읽고 분석 중입니다. (약 10초 소요)..."):
+            with st.status("🔍 데이터를 수집하고 분석하는 중입니다...", expanded=True) as status:
                 try:
+                    st.write("⏳ 1단계: 주가 지수 및 환율 데이터 수집 중...")
                     k_t, k_d, k_p = get_metric('^KS11')
                     s_t, s_d, s_p = get_metric('^GSPC')
                     krw_t, krw_d, krw_p = get_metric('KRW=X')
+                    st.write("✅ 1단계 완료!")
                     
+                    st.write("⏳ 2단계: 최신 뉴스 기사 크롤링 중...")
                     kr_news = get_latest_news("금리 OR 환율 OR 코스피 OR 외국인", limit=3)
                     global_news = get_latest_news("뉴욕증시 OR 연준 OR 트럼프 OR 빅테크", limit=3)
+                    st.write("✅ 2단계 완료!")
                     
+                    st.write("⏳ 3단계: 구글 AI 서버에 전송 중... (여기서 멈추면 API 문제!)")
                     news_text = "한국 이슈:\n" + "\n".join([n[0] for n in kr_news]) + "\n\n글로벌 이슈:\n" + "\n".join([n[0] for n in global_news])
                     metric_text = f"KOSPI: {k_t:,.2f} ({k_p:+.2f}%), S&P 500: {s_t:,.2f} ({s_p:+.2f}%), 원/달러 환율: {krw_t:,.2f}원"
                     
@@ -176,15 +182,17 @@ with tabs[0]:
                     """
                     
                     genai.configure(api_key=api_key)
-                    # 💡 구글 서버가 요구한 정확한 최신 무료 모델명(gemini-3.8-flash)으로 최종 적용 완료
                     model = genai.GenerativeModel('gemini-3.8-flash')
                     response = model.generate_content(prompt)
+                    st.write("✅ 3단계 완료!")
                     
+                    status.update(label="🎉 분석 성공!", state="complete", expanded=False)
                     st.success("✅ 분석 완료! 아래 텍스트를 복사하여 수정 후 인스타그램에 활용하세요.")
                     st.text_area("📋 생성된 피드 초안 (자유롭게 수정 후 복사하세요)", response.text, height=400)
                     
                 except Exception as e:
-                    st.error(f"AI 분석 중 오류가 발생했습니다: {e}")
+                    status.update(label="❌ 에러 발생", state="error", expanded=True)
+                    st.error(f"상세 에러 내용: {e}")
 
 with tabs[1]:
     col1, col2, col3, col4 = st.columns(4)
@@ -276,3 +284,5 @@ with tabs[8]:
         st.metric("중국 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
     with col3:
         st.markdown("### 🇹🇼 가권 지수")
+        t, d, p = get_metric("^TWII")
+        st.metric("대만 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
