@@ -313,4 +313,20 @@ with tabs[6]:
 
 with tabs[7]:
     st.subheader("📅 🇺🇸 미국 주요 기업 실적 및 경제지표 일정")
-    for title, link in get_latest_news("미국 증시 일정 OR 실적 OR FOMC OR CPI OR PPI OR PCE"):
+    for title, link in get_latest_news("미국 증시 일정 OR 실적 OR FOMC OR CPI OR PPI OR PCE", limit=10, period="7d"):
+        st.markdown(f"🔹 [{title}]({link})")
+
+with tabs[8]:
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown("### 🇯🇵 니케이 225")
+        t, d, p = get_metric("^N225")
+        st.metric("일본 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
+    with col2:
+        st.markdown("### 🇨🇳 상해 종합")
+        t, d, p = get_metric("000001.SS")
+        st.metric("중국 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
+    with col3:
+        st.markdown("### 🇹🇼 가권 지수")
+        t, d, p = get_metric("^TWII")
+        st.metric("대만 증시", f"{t:,.2f}", f"{d:,.2f} ({p:+.2f}%)")
